@@ -194,11 +194,12 @@
       </div>
     </div>
 
-    <!-- Step 2: Settings (unchanged, original) -->
+    <!-- Step 2: Settings (with video element) -->
     <div id="settings" class="content" role="tabpanel">
       <div class="full-strecth-flex-vertical center-content">
         <div id="webcam-msg"><p><b>Requesting camera access... <br />Please click "Allow" when prompted.</b></p></div>
         <div id="webcam">
+          <video id="video" autoplay style="width:100%; background:#000;"></video>
           <div id="heightIndicator" style="display:none;position:absolute;z-index:999;border-right:0px solid #ff4;border-bottom:2px solid #ff4;height:1px;margin-top:120px;width:320px;"></div>
         </div>
         <div style="padding-bottom:10px;padding-top:2rem;">
@@ -257,11 +258,11 @@
       <button class="demo-button next" id="download-spectrum" onclick="$W.downloadSpectrum();">Download</button>
     </div>
 
-    <!-- Step 4: Plotting (will be populated by both capture and upload) -->
+    <!-- Step 4: Plotting (interactive graph) -->
     <div id="plotting" class="content center-content" role="tabpanel">
       <h3>Result Plot</h3>
       <div id="graph1"></div>
-      <p>Use the bottom graph as a navigator to zoom by dragging.</p>
+      <p>Hover over the graph to see values. Click on legend to toggle lines.</p>
       <button class="demo-button" id="restart">Restart</button>
     </div>
 
@@ -269,7 +270,6 @@
 </div>
 
 <script>
-  // Wait for DOM and all custom scripts to be ready
   $(document).ready(function () {
     // Initialize stepper
     var stepper = new Stepper($('.bs-stepper')[0], {
@@ -285,37 +285,73 @@
     $("#setting-page-next").on('click', function () { stepper.to(3); });
     $("#capture-trigger").on('click', function () { stepper.to(3); });
 
-    // Capture save & plot
+    // ---------- Webcam initialization (copy from original new-capture) ----------
+    $W.initialize({
+      calibrated: false,
+      interface: "capture",
+      mode: "combined",
+      flipped: false,
+      width: 640
+    });
+    setInterval($W.getRow, 100);
+    $W.calibrated = false;
+
+    // Observe contrast (optional, for CFL detection)
+    if ($W.observe_contrast) {
+      $W.observe_contrast(
+        false,
+        function () { $('#cfl-detect i').css('color', 'red'); },
+        function () { $('#cfl-detect i').css('color', 'white'); }
+      );
+    }
+
+    // Helper to create spectrum object from RGB data (array of [r,g,b] per pixel)
+    function createSpectrumFromRGB(rgbData) {
+      var lines = rgbData.map(function(pixel, idx) {
+        var r = pixel[0];
+        var g = pixel[1];
+        var b = pixel[2];
+        var avg = (r + g + b) / 3;
+        return {
+          pixel: idx,
+          r: r,
+          g: g,
+          b: b,
+          average: avg
+        };
+      });
+      return new SpectralWorkbench.Spectrum({ data: { lines: lines } });
+    }
+
+    // Capture save & plot (with RGB lines)
     $("#capture-page-next").on('click', function () {
       stepper.to(4);
       $("#capture-trigger, #setting-trigger, #landing-page-trigger").prop('disabled', true);
       $W.saveSpectrum();
-      var imageData = $W.full_data;
-      if (imageData && imageData.length) {
-        var formatted = imageData.map(function(item, idx) {
-          return [idx, Array.isArray(item) ? item[item.length-1] : item];
-        });
+      // $W.full_data is an array of pixel rows; we take the last row (the one we captured)
+      var capturedRow = $W.full_data[$W.full_data.length - 1];
+      if (capturedRow && capturedRow.length) {
+        var spectrum = createSpectrumFromRGB(capturedRow);
         var graph = new SpectralWorkbench.Graph({ selector: '#graph1' });
-        var spectrum = new SpectralWorkbench.Spectrum(formatted);
         graph.load(spectrum);
+      } else {
+        console.warn("No spectrum data captured");
       }
     });
 
     $("#plot-trigger").on('click', function () {
       stepper.to(4);
-      if ($W.full_data && $W.full_data.length) {
-        var formatted = $W.full_data.map(function(item, idx) {
-          return [idx, Array.isArray(item) ? item[item.length-1] : item];
-        });
+      var capturedRow = $W.full_data ? $W.full_data[$W.full_data.length - 1] : null;
+      if (capturedRow && capturedRow.length) {
+        var spectrum = createSpectrumFromRGB(capturedRow);
         var graph = new SpectralWorkbench.Graph({ selector: '#graph1' });
-        var spectrum = new SpectralWorkbench.Spectrum(formatted);
         graph.load(spectrum);
       }
     });
 
     $("#restart").on('click', function () { location.reload(); });
 
-    // ---------- Image Upload Module ----------
+    // ---------- Image Upload Module (extracts RGB data from selected row) ----------
     let currentImage = null;
     let selectedRow = null;
     let previewCanvas = document.getElementById('uploadPreviewCanvas');
@@ -378,7 +414,7 @@
         alert('Please select a row by clicking on the image.');
         return;
       }
-      // Extract intensity from the selected row (using original image dimensions)
+      // Extract RGB data from the selected row (using original image dimensions)
       let offCanvas = document.createElement('canvas');
       offCanvas.width = currentImage.width;
       offCanvas.height = currentImage.height;
@@ -387,26 +423,17 @@
       let scaleY = currentImage.height / previewCanvas.height;
       let originalRow = Math.floor(selectedRow * scaleY);
       originalRow = Math.min(originalRow, currentImage.height - 1);
-      let data = [];
+      let rgbData = [];
       for (let x = 0; x < currentImage.width; x++) {
         let pixel = offCtx.getImageData(x, originalRow, 1, 1).data;
-        let intensity = 0.299 * pixel[0] + 0.587 * pixel[1] + 0.114 * pixel[2];
-        data.push([x, intensity]);
+        rgbData.push([pixel[0], pixel[1], pixel[2]]);
       }
       // Navigate to plotting step and render the graph
       stepper.to(4);
-      if (typeof SpectralWorkbench !== 'undefined' && SpectralWorkbench.Graph) {
-        let graph = new SpectralWorkbench.Graph({ selector: '#graph1' });
-        let spectrum = new SpectralWorkbench.Spectrum(data);
-        graph.load(spectrum);
-      } else {
-        // Fallback (should not happen if scripts loaded)
-        $.plot('#graph1', [{ data: data, color: '#ffaa33', lines: { show: true } }], {
-          xaxis: { min: 0, max: currentImage.width },
-          yaxis: { min: 0, max: 255 }
-        });
-      }
-      // Disable webcam steps after upload (optional)
+      var spectrum = createSpectrumFromRGB(rgbData);
+      var graph = new SpectralWorkbench.Graph({ selector: '#graph1' });
+      graph.load(spectrum);
+      // Disable webcam steps after upload
       $("#capture-trigger, #setting-trigger, #landing-page-trigger").prop('disabled', true);
     });
   });
