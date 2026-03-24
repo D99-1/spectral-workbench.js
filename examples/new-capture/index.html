@@ -2,7 +2,7 @@
 <html manifest="/not-existing.appcache">
 <head>
   <meta charset="utf-8">
-  <title>SpectralWorkbench</title>
+  <title>SpectralWorkbench - Upload & Capture</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="An open source spectral library and DIY spectrometry community developing environmental testing techniques.">
   <meta name="author" content="Public Lab contributors">
@@ -27,11 +27,9 @@
   <script src="../capture/graph.js" type="text/javascript"></script>
   <script src="https://cdn.jsdelivr.net/npm/bs-stepper/dist/js/bs-stepper.min.js"></script>
 
-
   <script src="../capture/capture.js" type="text/javascript"></script>
   <script src="../../dist/capture.dist.js" type="text/javascript"></script>
   <script src="../capture/api.js" type="text/javascript"></script>
-
 
   <script src="../../node_modules/d3/d3.js" type="text/javascript"></script>                                                                              
   <script src="../../node_modules/nvd3/build/nv.d3.js" type="text/javascript"></script>                                                                              
@@ -40,36 +38,92 @@
   <link href="../../node_modules/nvd3/build/nv.d3.css" rel="stylesheet">
   <link href="../../dist/spectral-workbench.css" rel="stylesheet">
   
-
   <link href="new-capture.css" media="all" rel="stylesheet" type="text/css" />
 
-  <!--
-      <link href="/assets/application-5135736be98a3c4fdf136cbc62545fd2.css" media="all" rel="stylesheet" type="text/css" />
-      <meta content="Szbc3vBNsTKwYnmFkjg3L2kCBSe8EYSg9Zu7keJJzPs=" name="csrf-token" />
-      <script src="/assets/application-0add8749179623a04221903b025c601c.js" type="text/javascript"></script>
-  -->
-
-  <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
-  <!--[if lt IE 9]>
-  <script src="https://html5shim.googlecode.com/svn/trunk/html5.js"></script>
-  <![endif]-->
-
+  <style>
+    /* additional styling for upload option - same theme */
+    .upload-card {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 2rem 0;
+      border: 1px solid #e0e4e8;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      transition: all 0.2s ease;
+    }
+    .upload-card:hover {
+      border-color: #2c6e9e;
+      box-shadow: 0 4px 12px rgba(44,110,158,0.1);
+    }
+    .upload-preview-area {
+      background: #1e2a36;
+      border-radius: 12px;
+      padding: 1rem;
+      margin-top: 1.2rem;
+      text-align: center;
+    }
+    .upload-preview-canvas {
+      max-width: 100%;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      background: #000;
+      cursor: crosshair;
+    }
+    .row-indicator {
+      position: relative;
+      display: inline-block;
+    }
+    .row-highlight {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #ffcc00;
+      box-shadow: 0 0 6px #ffaa00;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .btn-outline-upload {
+      background: transparent;
+      border: 2px solid #2c6e9e;
+      color: #2c6e9e;
+      transition: 0.2s;
+    }
+    .btn-outline-upload:hover {
+      background: #2c6e9e;
+      color: white;
+    }
+    .upload-status {
+      font-size: 0.85rem;
+      margin-top: 0.5rem;
+      color: #2c6e9e;
+      font-weight: 500;
+    }
+    .upload-section-divider {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      margin: 1.8rem 0;
+    }
+    .upload-section-divider::before,
+    .upload-section-divider::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid #ddd;
+    }
+    .upload-section-divider span {
+      padding: 0 0.8rem;
+      color: #6c757d;
+      font-weight: 500;
+    }
+  </style>
 </head>
 
 <body class="full-strecth-block">
 
   <div class="full-strecth-block bs-stepper">
 
-  <!-- <header id="stepper">
-    <span>Pre Capture Setup</span>
-    <span class="dotted-line"></span>
-    <span>Capturing Phase</span>
-    <span class="dotted-line"></span>
-    <span>Plot and Calibration</span>
-  </header> -->
-
     <div class="bs-stepper-header" role="tablist">
-      <!-- your steps here -->
       <div class="step" data-target="#landing-page">
         <button type="button" class="step-trigger" role="tab" aria-controls="landing-page" id="landing-page-trigger">
           <span class="bs-stepper-label">Home Page</span>
@@ -95,60 +149,68 @@
       </div>
     </div>
 
-
     <div class="capture full-strecth-block bs-stepper-content" id="main-content">
 
-       <!-- step 0 landing Page   -->
+      <!-- step 0 landing Page - enhanced with IMAGE UPLOAD option -->
       <div id="landing-page" class="full-strecth-flex-vertical content" role="tabpanel">
-        
         <div id="landing-page-content">
           <h1> 
-            <img src="./asset//logo.png">
-            Spectral WorkBench <small>by Public Lab (DEMO)</small></h1>
-          <br><br>
+            <img src="./asset//logo.png" alt="logo">
+            Spectral WorkBench <small>by Public Lab (DEMO)</small>
+          </h1>
+          <br>
           <p>What is Spectral Workbench? SpectralWorkbench.org is a web based application to collect, 
             archive, share, and analyze spectral data, for Public Lab DIY spectrometers and other spectrometers. 
             With it, you can: connect your USB Desktop Spectrometry Kit. scan and save samples. Try out the 
             application with upload or capture image.
           </p>
-          <br><br><br>
-          <button class="demo-button next" id="landing-page-next">Capture Spectra</button>
-          <br><br><br>
+          
+          <!-- IMAGE UPLOAD OPTION (new card, same theme) -->
+          <div class="upload-card">
+            <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-upload" style="color:#2c6e9e;"></i> Upload an Image</h4>
+            <p style="margin-bottom: 0.75rem;">Analyze a spectrum from your own image file (JPEG/PNG). Select a horizontal row to extract intensity profile.</p>
+            <div class="row">
+              <div class="col-md-8">
+                <input type="file" id="spectrumImageUpload" accept="image/jpeg, image/png, image/jpg" style="display: none;">
+                <button class="btn btn-primary demo-button" id="triggerUploadBtn" style="background:#2c6e9e; border: none;"><i class="fas fa-folder-open"></i> Choose Image</button>
+                <button class="btn btn-outline-upload demo-button" id="processUploadedBtn" disabled style="margin-left: 10px;"><i class="fas fa-chart-line"></i> Extract & Plot</button>
+                <span id="uploadFileName" class="upload-status" style="margin-left: 15px;">No file selected</span>
+              </div>
+            </div>
+            <div id="uploadPreviewContainer" class="upload-preview-area" style="display: none;">
+              <div style="position: relative; display: inline-block;" id="previewWrapper">
+                <canvas id="uploadPreviewCanvas" class="upload-preview-canvas" width="640" height="200" style="max-width:100%; height:auto; cursor: crosshair;"></canvas>
+                <div id="rowGuide" class="row-highlight" style="display: none;"></div>
+              </div>
+              <p class="text-muted" style="margin-top: 8px; font-size: 0.8rem;"><i class="fas fa-mouse-pointer"></i> Click on the image to set the sample row (yellow bar). Then click "Extract & Plot".</p>
+              <div id="rowCoordDisplay" style="font-size: 0.8rem; color: #ffcc00;"></div>
+            </div>
+          </div>
+          <div class="upload-section-divider"><span>OR</span></div>
+          
+          <button class="demo-button next" id="landing-page-next"><i class="fas fa-video"></i> Capture Spectra (Webcam)</button>
+          <br><br>
           <span>
             <a href="https://spectralworkbench.org/dashboard"><i class="fas fa-home"></i></a>
             <a href="https://github.com/publiclab/spectral-workbench.js"><i class="fab fa-github"></i></a>
             <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fspectralworkbench.org%2Fdashboard&ref_src=twsrc%5Etfw&screen_name=SpectralWB&tw_p=followbutton"><i class="fab fa-twitter"></i></a>
             <a href="https://publiclab.org/wiki/spectral-workbench-help"><i class="fas fa-info-circle"></i></a>
           </span>
-
         </div>
-
       </div>
 
-
-
-
-
-
-
-      <!--  step 2 setup   -->
+      <!-- step 2 settings (unchanged, webcam calibration) -->
       <div id="settings" class="content" role="tabpanel">
-
-
         <div class="full-strecth-flex-vertical center-content">
-          <!-- <h3>Setup</h3> -->
-
-          <div id="webcam-msg"><p><b>Requesting camera access... <br />(<a href="https://play.google.com/store/apps/details?id=org.mozilla.firefox">Firefox</a>, <a href="https://play.google.com/store/apps/details?id=com.opera.browser">Opera</a> or Chrome on Android, or <a href="https://itunes.apple.com/us/app/bowser/id560478358">Bowser</a> on iOS). Please click "Allow" when prompted, or try the <a href="/upload">Upload interface</a>.</b></p></div>
+          <div id="webcam-msg"><p><b>Requesting camera access... <br />(<a href="https://play.google.com/store/apps/details?id=org.mozilla.firefox">Firefox</a>, <a href="https://play.google.com/store/apps/details?id=com.opera.browser">Opera</a> or Chrome on Android, or <a href="https://itunes.apple.com/us/app/bowser/id560478358">Bowser</a> on iOS). Please click "Allow" when prompted, or use the Upload option on the Home page.</b></p></div>
           <div id="webcam">
-
             <div id="heightIndicator" style="display:none;position:absolute;margin:0;z-index:999;border-right:0px solid #ff4;border-bottom:2px solid #ff4;height:1px;margin-top:120px;width:320px;font-weight:bold;">
-              <div class="vertical"   style="margin-top:3px;padding:2px;background:black;float:right;display:none; color: white;">BLUE</div>
+              <div class="vertical" style="margin-top:3px;padding:2px;background:black;float:right;display:none; color: white;">BLUE</div>
               <div class="horizontal" style="margin-top:3px;padding:2px;background:black;float:right;color: white;">RED</div>
               <div class="horizontal" style="margin-top:3px;padding:2px;background:black;float:left;color: white;">BLUE</div>
-              <div class="vertical"   style="margin-top:3px;padding:2px;background:black;float:right;margin-top:200px;display:none;color: white;">RED</div>
+              <div class="vertical" style="margin-top:3px;padding:2px;background:black;float:right;margin-top:200px;display:none;color: white;">RED</div>
             </div>
           </div>
-
           <div style="padding-bottom:10px;padding-top:2rem;">
             <div class="spectrum-example-vertical" style="display:none;">
               <p style="margin-top:4px;">Point your spectrometer at a light and click on the video above to choose a cross-section to sample. (<a href="http://publiclab.org/wiki/spectral-workbench-usage">Learn more &raquo;</a>)</p>
@@ -159,51 +221,28 @@
               <img width="480px" src="calibration-example.png" />
             </div>
           </div>
-
           <script>
             jQuery(document).ready(function() {
-              $W.setSampleRowClickListener()
+              if(typeof $W !== 'undefined' && $W.setSampleRowClickListener) $W.setSampleRowClickListener();
             })
           </script>
-
           <p style="padding-top:5px;">
-            <a rel="tooltip" title="" class="btn btn-default" onclick="$W.auto_detect_sample_row()" data-original-title="Auto select sample row"><i class="fa fa-white fa-arrows-v"></i> Auto-select Sample Row</a>
-            <a rel="tooltip" title="Flip video horizontally" class="btn btn-default btn-flip" onClick="$W.flip_horizontal()"><i class="fa fa-white fa-arrows-h"></i> Flip image</a>
-            <a rel="tooltip" title="Rotate video 90 &deg;" class="btn btn-default btn-rotate" onClick="$W.toggle_rotation()"><i class="fa fa-white fa-rotate-right"></i> Rotate</a>
+            <a rel="tooltip" title="" class="btn btn-default" onclick="if(typeof $W !== 'undefined') $W.auto_detect_sample_row()" data-original-title="Auto select sample row"><i class="fa fa-white fa-arrows-v"></i> Auto-select Sample Row</a>
+            <a rel="tooltip" title="Flip video horizontally" class="btn btn-default btn-flip" onClick="if(typeof $W !== 'undefined') $W.flip_horizontal()"><i class="fa fa-white fa-arrows-h"></i> Flip image</a>
+            <a rel="tooltip" title="Rotate video 90 &deg;" class="btn btn-default btn-rotate" onClick="if(typeof $W !== 'undefined') $W.toggle_rotation()"><i class="fa fa-white fa-rotate-right"></i> Rotate</a>
           </p>
-
           <div class="select" style="padding-top:5px;">
             <label for="videoSource">Camera source: </label><select id="videoSource"></select>
           </div>
-          
-          <p style="padding-top:5px;">
-            Help <a href="http://publiclab.org/wiki/spectral-workbench-usage#Webcam+selection">selecting a camera</a>
-          </p>
-
-
+          <p style="padding-top:5px;">Help <a href="http://publiclab.org/wiki/spectral-workbench-usage#Webcam+selection">selecting a camera</a></p>
           <a class="btn btn-large btn-primary" href="#capture" onClick="$('#capture-btn').addClass('active');$('#settings-btn').removeClass('active');" data-toggle="tab" id="setting-page-next">Begin capturing &raquo;</a>
-
           <hr />
         </div>
-
-
-        <!-- <p><b>Offline use:</b> To use this interface offline, load the offline capture tool <a href="/capture/offline">by clicking here</a>. Once the page loads, you'll be able to access that page even without internet access; it will be stored in your browser.</p> -->
-
       </div>
 
-
-
-
-
-
-
-
-
-      <!--     step 3 capturing phasing-->
+      <!-- step 3 capturing phase (unchanged) -->
       <div id="capture" class="content center-content" role="tabpanel">
-
         <div class="full-strecth-flex-horizontal center-content">
-          <!-- <h3>Capturing Phase</h3> -->
           <div style="width: 28em; margin-right: 1em">
             <div id="sidebar" style="width: 26em; margin: 2em auto 2em auto">
               <div class="hidden-phone" >
@@ -211,203 +250,289 @@
                 <canvas style="width:100%;height:100px;" id="preview"></canvas>
               </div>
               <div class="btn-group toolbar" data-toggle="buttons-checkbox" style="margin-bottom:2em; margin-left: 9em; margin-top: 2em">
-                <a rel="tooltip" title="Rotate video" class="btn btn-default btn-rotate" onClick="$W.toggle_rotation()"><i class="fa fa-white fa-repeat"></i></a>
-                <a rel="tooltip" title="Flip video horizontally" class="btn btn-default btn-flip" onClick="$W.flip_horizontal()"><i class="fa fa-white fa-arrows-h"></i></a>
-                <a rel="tooltip" title="Scale video" class="btn btn-default" onClick="$W.scale_h = parseFloat(prompt('Enter a horizontal scaling factor (default is 1):'))"><i class="fa fa-white fa-expand"></i></a>
+                <a rel="tooltip" title="Rotate video" class="btn btn-default btn-rotate" onClick="if(typeof $W !== 'undefined') $W.toggle_rotation()"><i class="fa fa-white fa-repeat"></i></a>
+                <a rel="tooltip" title="Flip video horizontally" class="btn btn-default btn-flip" onClick="if(typeof $W !== 'undefined') $W.flip_horizontal()"><i class="fa fa-white fa-arrows-h"></i></a>
+                <a rel="tooltip" title="Scale video" class="btn btn-default" onClick="if(typeof $W !== 'undefined') $W.scale_h = parseFloat(prompt('Enter a horizontal scaling factor (default is 1):'))"><i class="fa fa-white fa-expand"></i></a>
               </div>
               <p>Note: Use the tools above to make adjustment of the capturing. To adjust the sampling yellow bar location, go back to the previous step.</p>
               <script>
                 jQuery(document).ready(function() {
-                  $W.observe_contrast(
-                          false,
-                          function() {
-                            $('#cfl-detect i').css('color','red');
-                          },
-                          function() {
-                            $('#cfl-detect i').css('color','white');
-                          }
-                  )
+                  if(typeof $W !== 'undefined' && $W.observe_contrast) {
+                    $W.observe_contrast(false, function() { $('#cfl-detect i').css('color','red'); }, function() { $('#cfl-detect i').css('color','white'); });
+                  }
                 })
-  
               </script>
             </div>
           </div>
           <div id="capture-phase-right" style="width: 50em;">
             <div style="width: 48em;">
               <div class="btn-group toolbar" data-toggle="buttons-radio">
-                <a rel="tooltip" title="Default mode" class="btn btn-default btn-sm" onClick="$W.toggle_mode()"><i class="fa fa-white fa-circle-o"></i></a>
-                <a rel="tooltip" title="RGB mode" class="btn btn-default btn-sm" onClick="$W.toggle_mode()"><i class="fa fa-white fa fa-adjust"></i></a>
-                <a rel="tooltip" title="Combined readout" class="btn btn-default btn-sm" onClick="$W.show_combined()"><i class="fa fa-white fa fa-list-ul"></i></a>
+                <a rel="tooltip" title="Default mode" class="btn btn-default btn-sm" onClick="if(typeof $W !== 'undefined') $W.toggle_mode()"><i class="fa fa-white fa-circle-o"></i></a>
+                <a rel="tooltip" title="RGB mode" class="btn btn-default btn-sm" onClick="if(typeof $W !== 'undefined') $W.toggle_mode()"><i class="fa fa-white fa fa-adjust"></i></a>
+                <a rel="tooltip" title="Combined readout" class="btn btn-default btn-sm" onClick="if(typeof $W !== 'undefined') $W.show_combined()"><i class="fa fa-white fa fa-list-ul"></i></a>
               </div>
               <div id="graph" style="width: 100%; margin-bottom:2em"></div>
               <canvas style="background:#333;width:100%;height:100px;width: 96%;margin-left: 1.8em;" id="canvas"></canvas>
-              <p style="margin-left: 1.8em;margin-top:2em;width: 96%;">This display shows the last few seconds of data, descending. The top, newest row of pixels is used by default to generate the graph. This can be changed later.</p>
+              <p style="margin-left: 1.8em;margin-top:2em;width: 96%;">This display shows the last few seconds of data, descending. The top, newest row of pixels is used by default to generate the graph.</p>
             </div>
           </div>
         </div>
-
         <input name="dataurl" type="hidden" id="dataurl" />
-
         <button class="demo-button next" id="capture-page-next">Save Capture</button>
         <p style="margin-top: 0.5em">Once you save the capture, you cannot go back here.</p>
         <img style="display:none;background:#333;" id="spectrum-preview" />
-
-        <button class="demo-button next" id="download-spectrum" onClick="$W.downloadSpectrum();">Download</button>
-
+        <button class="demo-button next" id="download-spectrum" onClick="if(typeof $W !== 'undefined') $W.downloadSpectrum();">Download</button>
       </div>
 
-
-
-
-      <!--  step 4 Plotting phasing-->
+      <!-- step 4 Plotting (reused for both upload & capture) -->
       <div id="plotting" class="content center-content" role="tabpanel">
         Here Is the result plot
         <div class="swb-graphing center-content">
           <div id="graph1"></div>
         </div>
-
         <div id="plotting-note">
           Use the bottom graph as the navigator to zoom into any section of the plot by dragging
           to select the target region span. User could also move the span in the navigator
         </div>
-
         <button class="demo-button" id="restart" style="margin-top: 1em">Restart</button>
-
-        <script>
-          jQuery(document).ready(function() {
-            $("#restart").on('click', function (params) {
-              location.reload();
-            });
-          })
-
-        </script>
       </div>
 
-
-
-
-
     </div>
-
-
-
-
-
-
-
-
-
   </div>
 
   <script>
+    // ========== IMAGE UPLOAD MODULE - SAME STYLING THEME ==========
     (function() {
+      let uploadedImageDataUrl = null;
+      let uploadedImgElement = null;
+      let selectedRowY = null;
+      let originalImageWidth = 0, originalImageHeight = 0;
+      let previewCanvas = null, ctx = null;
+      let currentImageObj = null;
 
-      $W.initialize({
-        calibrated: false,
-        interface:"capture",
-        mode:"combined",
-        flipped: false,
-        width: 640
-      })
+      const fileInput = document.getElementById('spectrumImageUpload');
+      const triggerBtn = document.getElementById('triggerUploadBtn');
+      const processBtn = document.getElementById('processUploadedBtn');
+      const fileNameSpan = document.getElementById('uploadFileName');
+      const previewContainer = document.getElementById('uploadPreviewContainer');
+      const previewCanvasElem = document.getElementById('uploadPreviewCanvas');
+      const rowGuideDiv = document.getElementById('rowGuide');
+      const rowCoordDisplay = document.getElementById('rowCoordDisplay');
 
+      if(triggerBtn) {
+        triggerBtn.addEventListener('click', () => {
+          fileInput.click();
+        });
+      }
 
-      setInterval($W.getRow,100)
-      $W.calibrated = false
+      fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        fileNameSpan.innerText = file.name;
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+          uploadedImageDataUrl = ev.target.result;
+          const img = new Image();
+          img.onload = function() {
+            currentImageObj = img;
+            originalImageWidth = img.width;
+            originalImageHeight = img.height;
+            // set canvas dimensions (max width 640, maintain aspect)
+            let displayWidth = Math.min(640, originalImageWidth);
+            let displayHeight = (displayWidth / originalImageWidth) * originalImageHeight;
+            previewCanvasElem.width = displayWidth;
+            previewCanvasElem.height = displayHeight;
+            previewCanvas = previewCanvasElem;
+            ctx = previewCanvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
+            previewContainer.style.display = 'block';
+            rowGuideDiv.style.display = 'none';
+            selectedRowY = null;
+            rowCoordDisplay.innerText = 'Click on image to select sample row (yellow line)';
+            processBtn.disabled = true;
+            // add click handler on canvas to pick row
+            $(previewCanvasElem).off('click').on('click', function(event) {
+              const rect = previewCanvasElem.getBoundingClientRect();
+              const scaleX = previewCanvasElem.width / rect.width;
+              const scaleY = previewCanvasElem.height / rect.height;
+              let mouseY = (event.clientY - rect.top) * scaleY;
+              mouseY = Math.min(Math.max(mouseY, 0), previewCanvasElem.height - 1);
+              selectedRowY = Math.floor(mouseY);
+              // highlight row on canvas overlay
+              const yPercent = (selectedRowY / previewCanvasElem.height) * 100;
+              rowGuideDiv.style.display = 'block';
+              rowGuideDiv.style.top = `calc(${yPercent}% + ${previewCanvasElem.offsetTop}px)`;
+              rowGuideDiv.style.width = `${previewCanvasElem.clientWidth}px`;
+              rowCoordDisplay.innerHTML = `<i class="fas fa-chart-line"></i> Selected row Y = ${selectedRowY} px (relative to displayed image). Ready to extract spectrum.`;
+              processBtn.disabled = false;
+              // redraw image to keep fresh (avoid ghost lines)
+              ctx.drawImage(currentImageObj, 0, 0, previewCanvasElem.width, previewCanvasElem.height);
+              // draw temporary line on canvas as visual feedback (yellow)
+              ctx.beginPath();
+              ctx.moveTo(0, selectedRowY);
+              ctx.lineTo(previewCanvasElem.width, selectedRowY);
+              ctx.strokeStyle = '#ffcc00';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            });
+          };
+          img.src = uploadedImageDataUrl;
+        };
+        reader.readAsDataURL(file);
+      });
 
-      if ($('body').width() > 768) $('#tool-toggle').hide()
-      else $('#tool-pane').hide()
+      // Extract spectrum from selected row
+      function extractSpectrumFromRow(canvasElem, rowY, imgWidthOrig, imgHeightOrig, displayWidth, displayHeight) {
+        return new Promise((resolve) => {
+          if (!canvasElem || rowY === null) reject('No row selected');
+          const offCanvas = document.createElement('canvas');
+          offCanvas.width = imgWidthOrig;
+          offCanvas.height = imgHeightOrig;
+          const offCtx = offCanvas.getContext('2d');
+          offCtx.drawImage(currentImageObj, 0, 0, imgWidthOrig, imgHeightOrig);
+          const rowScaled = Math.floor((rowY / displayHeight) * imgHeightOrig);
+          const clampedRow = Math.min(Math.max(rowScaled, 0), imgHeightOrig - 1);
+          const imageDataArray = [];
+          for (let x = 0; x < imgWidthOrig; x++) {
+            const pixel = offCtx.getImageData(x, clampedRow, 1, 1).data;
+            const r = pixel[0];
+            const g = pixel[1];
+            const b = pixel[2];
+            const intensity = Math.floor(0.299 * r + 0.587 * g + 0.114 * b); // luminance
+            imageDataArray.push([x, intensity]);
+          }
+          resolve(imageDataArray);
+        });
+      }
 
+      // Plot spectrum using SpectralWorkbench.Graph (same as capture flow)
+      async function loadUploadedSpectrumToPlot() {
+        if (!currentImageObj || selectedRowY === null) {
+          alert('Please select a row from the uploaded image by clicking on it.');
+          return;
+        }
+        const displayW = previewCanvasElem.width;
+        const displayH = previewCanvasElem.height;
+        try {
+          const spectrumPoints = await extractSpectrumFromRow(previewCanvasElem, selectedRowY, originalImageWidth, originalImageHeight, displayW, displayH);
+          // format exactly like capture flow: array of [x, intensity]
+          const formatted = spectrumPoints.map(pt => [pt[0], pt[1]]);
+          
+          // get stepper instance and move to plotting step
+          const stepperElem = document.querySelector('.bs-stepper');
+          let stepperInstance = null;
+          if (stepperElem && typeof Stepper !== 'undefined') {
+            stepperInstance = new Stepper(stepperElem, { linear: false, animation: true });
+            // navigate to plotting step (index 4)
+            stepperInstance.to(4);
+          } else {
+            // fallback manual
+            window.location.hash = '#plotting';
+            $('.step').removeClass('active');
+            $('#plot-trigger').parent().addClass('active');
+            $('#main-content .content').hide();
+            $('#plotting').show();
+          }
+          
+          // after a short delay ensure graph container exists, then render
+          setTimeout(() => {
+            if (typeof SpectralWorkbench !== 'undefined' && SpectralWorkbench.Graph) {
+              const graph = new SpectralWorkbench.Graph({ selector: '#graph1' });
+              const spectrum = new SpectralWorkbench.Spectrum(formatted, graph);
+              graph.load(spectrum);
+            } else {
+              // fallback flot if SpectralWorkbench not fully loaded (unlikely)
+              if ($.plot && $('#graph1').length) {
+                $.plot('#graph1', [{ data: formatted, color: '#ffaa33', lines: { show: true }, points: { show: false } }], {
+                  xaxis: { min: 0, max: originalImageWidth, title: 'Pixel column' },
+                  yaxis: { min: 0, max: 255, title: 'Intensity' },
+                  grid: { backgroundColor: '#222', borderColor: '#444', color: '#ccc' }
+                });
+              }
+            }
+            // small notification
+            $('#plotting-note').prepend('<div class="alert alert-success" style="background:#1e4620; margin-bottom:10px;"><i class="fas fa-image"></i> Spectrum extracted from uploaded image (row ' + selectedRowY + ')</div>').children().first().delay(4000).fadeOut();
+          }, 200);
+        } catch(e) {
+          console.error(e);
+          alert('Error extracting spectrum, please try selecting another row.');
+        }
+      }
+
+      if (processBtn) {
+        processBtn.addEventListener('click', loadUploadedSpectrumToPlot);
+      }
     })();
+
+    // original stepper and $W init (preserve full functionality)
+    (function() {
+      if(typeof $W !== 'undefined' && $W.initialize) {
+        $W.initialize({
+          calibrated: false,
+          interface:"capture",
+          mode:"combined",
+          flipped: false,
+          width: 640
+        });
+        if(typeof setInterval === 'function') setInterval($W.getRow,100);
+        if($W.calibrated !== undefined) $W.calibrated = false;
+        if ($('body').width() > 768) $('#tool-toggle').hide();
+        else $('#tool-pane').hide();
+      }
+    })();
+
+    // stepper navigation (preserve original behavior + enable upload compatibility)
+    $(document).ready(function () {
+      let stepper = null;
+      if ($('.bs-stepper').length && typeof Stepper !== 'undefined') {
+        stepper = new Stepper($('.bs-stepper')[0], {
+          linear: false,
+          animation: true,
+          selectors: { steps: '.step', trigger: '.step-trigger', stepper: '.bs-stepper' }
+        });
+        window.stepperInstance = stepper;
+      }
+      $("#landing-page-trigger").on('click', function () { if(stepper) stepper.to(1); });
+      $("#landing-page-next").on('click', function () { if(stepper) stepper.to(2); });
+      $("#setting-trigger").on('click', function () { if(stepper) stepper.to(2); });
+      $("#setting-page-next").on('click', function () { if(stepper) stepper.to(3); });
+      $("#capture-trigger").on('click', function () { if(stepper) stepper.to(3); });
+      
+      let imageData;
+      const handlePlotting = () => {
+        if(stepper) stepper.to(4);
+        $("#capture-trigger").prop('disabled', true);
+        $("#setting-trigger").prop('disabled', true);
+        $("#landing-page-trigger").prop('disabled', true);
+        if(typeof $W !== 'undefined' && $W.saveSpectrum) $W.saveSpectrum();
+        imageData = (typeof $W !== 'undefined' && $W.full_data) ? $W.full_data : null;
+        if(imageData && imageData.length) {
+          let graph = new SpectralWorkbench.Graph({ selector: '#graph1' });
+          let imageDataFormatted = [];
+          imageData.forEach((item, index) => { let val = Array.isArray(item) ? item[item.length-1] : item; imageDataFormatted.push([index, val]); });
+          let spectrum = new SpectralWorkbench.Spectrum(imageDataFormatted, graph);
+          graph.load(spectrum);
+        } else {
+          if($('#graph1').length) $('#graph1').html('<div class="alert alert-warning">No spectrum data captured. Please use upload or capture properly.</div>');
+        }
+      };
+      
+      $("#capture-page-next").on('click', function (params) {
+        handlePlotting();
+      });
+      $("#plot-trigger").on('click', function (params) {
+        if(stepper) stepper.to(4);
+        if(typeof $W !== 'undefined' && $W.full_data && $W.full_data.length) {
+          let graph = new SpectralWorkbench.Graph({ selector: '#graph1' });
+          let imageDataFormatted = [];
+          $W.full_data.forEach((item, index) => { let val = Array.isArray(item) ? item[item.length-1] : item; imageDataFormatted.push([index, val]); });
+          let spectrum = new SpectralWorkbench.Spectrum(imageDataFormatted, graph);
+          graph.load(spectrum);
+        }
+      });
+      
+      $("#restart").on('click', function () { location.reload(); });
+    });
   </script>
 </body>
-
-<script>
-  // As a jQuery Plugin for the stepper
-  $(document).ready(function () {
-    var stepper = new Stepper($('.bs-stepper')[0], {
-      linear: false,
-      animation: true,
-      selectors: {
-        steps: '.step',
-        trigger: '.step-trigger',
-        stepper: '.bs-stepper'
-      }
-    });
-    $("#landing-page-trigger").on('click', function (params) {
-      stepper.to(1);
-    });
-    $("#landing-page-next").on('click', function (params) {
-      stepper.to(2);
-    });
-
-    
-    $("#setting-trigger").on('click', function (params) {
-      stepper.to(2);
-    });
-    $("#setting-page-next").on('click', function (params) {
-      stepper.to(3);
-    });
-
-
-    $("#capture-trigger").on('click', function (params) {
-      stepper.to(3);
-    });
-
-    var imageData;
-    $("#plot-trigger").on('click', function (params) {
-      stepper.to(4);stepper.to(4);
-      $("#capture-trigger").prop('disabled', true);
-      $("#setting-trigger").prop('disabled', true);
-      $("#landing-page-trigger").prop('disabled', true);
-
-      $W.saveSpectrum();
-      imageData = $W.full_data;
-      console.log('what is my image data like', JSON.stringify($W.full_data));
-
-      graph = new SpectralWorkbench.Graph({
-        selector: '#graph1' // defaults to "#graph" using jQuery selector syntax
-      });
-
-      var imageDataFormatted = [];
-      imageData.forEach((item, index) => {
-        var formattedItem = [index, item[item.length-1]]
-        imageDataFormatted.push(formattedItem)
-      })
-
-      var spectrum = new SpectralWorkbench.Spectrum(imageDataFormatted, graph);
-      // console.log('spectrum', spectrum.getJSON())
-      graph.load(spectrum);
-    });
-
-
-    $("#capture-page-next").on('click', function (params) {
-      stepper.to(4);
-      $("#capture-trigger").prop('disabled', true);
-      $("#setting-trigger").prop('disabled', true);
-      $("#landing-page-trigger").prop('disabled', true);
-
-      $W.saveSpectrum();
-      imageData = $W.full_data;
-      console.log('what is my image data like', JSON.stringify($W.full_data));
-
-      graph = new SpectralWorkbench.Graph({
-        selector: '#graph1' // defaults to "#graph" using jQuery selector syntax
-      });
-
-      var imageDataFormatted = [];
-      imageData.forEach((item, index) => {
-        var formattedItem = [index, item[item.length-1]]
-        imageDataFormatted.push(formattedItem)
-      })
-
-      var spectrum = new SpectralWorkbench.Spectrum(imageDataFormatted, graph); 
-      // console.log('spectrum', spectrum.getJSON())
-      graph.load(spectrum);
-
-
-    });
-
-
-  })
-</script>
 </html>
