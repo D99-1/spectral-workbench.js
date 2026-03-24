@@ -346,10 +346,10 @@
       var avg = (r + g + b) / 3;
       return {
         pixel: idx,
-        R: r,
-        G: g,
-        B: b,
-        Combined: avg
+        r: r,
+        g: g,
+        b: b,
+        average: avg
       };
     });
     return new SpectralWorkbench.Spectrum({ data: { lines: lines } });
@@ -379,7 +379,7 @@
       $("#capture-trigger, #setting-trigger, #landing-page-trigger").prop('disabled', true);
 
       $W.saveSpectrum();
-      var rowData = $W.full_data; // This should be an array of pixel values, each is [r,g,b,average]?
+      var rowData = $W.full_data; // Array of pixel values, each is [r,g,b,average] or {r,g,b}
       if (!rowData || !rowData.length) {
         console.warn("No spectrum data captured");
         return;
@@ -398,7 +398,9 @@
       });
 
       var spectrum = createRGBSpectrum(pixels);
-      $('#graph1').empty();
+      // Clear previous graph content
+      var graphContainer = $('#graph1');
+      graphContainer.empty();
       var graph = new SpectralWorkbench.Graph({ selector: '#graph1' });
       graph.load(spectrum);
     });
