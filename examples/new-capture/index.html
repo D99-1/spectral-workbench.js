@@ -49,6 +49,62 @@
   <link href="../../dist/spectral-workbench.css" rel="stylesheet">
   <link href="new-capture.css" media="all" rel="stylesheet" type="text/css" />
 
+  <style>
+    /* Image upload card styling (matches original theme) */
+    .upload-card {
+      background: #2c2c2c;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 20px 0;
+      border: 1px solid #3e6a8c;
+    }
+    .upload-preview-area {
+      background: #111;
+      border-radius: 6px;
+      padding: 10px;
+      margin-top: 10px;
+      text-align: center;
+    }
+    .upload-preview-canvas {
+      max-width: 100%;
+      border-radius: 4px;
+      cursor: crosshair;
+    }
+    .row-highlight {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #ffcc00;
+      box-shadow: 0 0 4px #ffaa33;
+      pointer-events: none;
+    }
+    .btn-spectrum {
+      background: #2c6e9e;
+      border: none;
+      color: white;
+      margin-right: 8px;
+    }
+    .btn-spectrum:hover {
+      background: #1e4a6e;
+      color: white;
+    }
+    .upload-section-divider {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .upload-section-divider hr {
+      flex: 1;
+      border-color: #444;
+    }
+    .upload-section-divider span {
+      margin: 0 15px;
+      color: #aaa;
+    }
+  </style>
+
   <!--[if lt IE 9]>
   <script src="https://html5shim.googlecode.com/svn/trunk/html5.js"></script>
   <![endif]-->
@@ -83,7 +139,7 @@
     </div>
 
     <div class="capture full-strecth-block bs-stepper-content" id="main-content">
-      <!-- step 0 landing Page -->
+      <!-- step 0 landing Page with Upload Card -->
       <div id="landing-page" class="full-strecth-flex-vertical content" role="tabpanel">
         <div id="landing-page-content">
           <h1> 
@@ -97,7 +153,30 @@
             application with upload or capture image.
           </p>
           <br><br><br>
-          <button class="demo-button next" id="landing-page-next">Capture Spectra</button>
+
+          <!-- Image Upload Card -->
+          <div class="upload-card">
+            <h4><i class="fa fa-upload"></i> Upload an Image</h4>
+            <p>Analyze a spectrum from your own image file (JPEG/PNG). Click on the preview to set the sample row (yellow bar).</p>
+            <input type="file" id="spectrumImageUpload" accept="image/jpeg,image/png" style="display:none;">
+            <button class="btn btn-spectrum" id="triggerUploadBtn"><i class="fa fa-folder-open"></i> Choose Image</button>
+            <button class="btn btn-spectrum" id="processUploadedBtn" disabled><i class="fa fa-chart-line"></i> Extract & Plot</button>
+            <span id="uploadFileName" style="margin-left:10px;"></span>
+            <div id="uploadPreviewContainer" class="upload-preview-area" style="display:none;">
+              <div style="position:relative; display:inline-block;">
+                <canvas id="uploadPreviewCanvas" class="upload-preview-canvas" width="640" height="200"></canvas>
+                <div id="rowGuide" class="row-highlight" style="display:none;"></div>
+              </div>
+              <p class="text-muted" style="margin-top:5px;">Click on the image to place the sampling row (yellow line).</p>
+              <div id="rowCoordDisplay"></div>
+            </div>
+          </div>
+
+          <div class="upload-section-divider">
+            <hr><span>OR</span><hr>
+          </div>
+
+          <button class="demo-button next" id="landing-page-next"><i class="fa fa-video-camera"></i> Capture Spectra (Webcam)</button>
           <br><br><br>
           <span>
             <a href="https://spectralworkbench.org/dashboard"><i class="fas fa-home"></i></a>
@@ -108,7 +187,7 @@
         </div>
       </div>
 
-      <!-- step 2 setup -->
+      <!-- step 2 setup (unchanged) -->
       <div id="settings" class="content" role="tabpanel">
         <div class="full-strecth-flex-vertical center-content">
           <div id="webcam-msg"><p><b>Requesting camera access... <br />(<a href="https://play.google.com/store/apps/details?id=org.mozilla.firefox">Firefox</a>, <a href="https://play.google.com/store/apps/details?id=com.opera.browser">Opera</a> or Chrome on Android, or <a href="https://itunes.apple.com/us/app/bowser/id560478358">Bowser</a> on iOS). Please click "Allow" when prompted, or try the <a href="/upload">Upload interface</a>.</b></p></div>
@@ -149,7 +228,7 @@
         </div>
       </div>
 
-      <!-- step 3 capturing phase -->
+      <!-- step 3 capturing phase (unchanged) -->
       <div id="capture" class="content center-content" role="tabpanel">
         <div class="full-strecth-flex-horizontal center-content">
           <div style="width: 28em; margin-right: 1em">
@@ -199,7 +278,7 @@
         <button class="demo-button next" id="download-spectrum" onClick="$W.downloadSpectrum();">Download</button>
       </div>
 
-      <!-- step 4 Plotting phase -->
+      <!-- step 4 Plotting phase (unchanged) -->
       <div id="plotting" class="content center-content" role="tabpanel">
         Here Is the result plot
         <div class="swb-graphing center-content">
@@ -315,6 +394,107 @@
       })
 
       var spectrum = new SpectralWorkbench.Spectrum(imageDataFormatted, graph); 
+      graph.load(spectrum);
+    });
+
+    // ----- Image Upload Module (integrated with the flow) -----
+    let currentImage = null;
+    let selectedRow = null;
+    let previewCanvas = document.getElementById('uploadPreviewCanvas');
+    let ctx = previewCanvas.getContext('2d');
+    let uploadContainer = document.getElementById('uploadPreviewContainer');
+    let rowGuide = document.getElementById('rowGuide');
+    let processBtn = document.getElementById('processUploadedBtn');
+    let fileNameSpan = document.getElementById('uploadFileName');
+
+    $('#triggerUploadBtn').click(() => $('#spectrumImageUpload').click());
+
+    $('#spectrumImageUpload').change((e) => {
+      let file = e.target.files[0];
+      if (!file) return;
+      fileNameSpan.innerText = file.name;
+      let reader = new FileReader();
+      reader.onload = (ev) => {
+        let img = new Image();
+        img.onload = () => {
+          currentImage = img;
+          let displayWidth = Math.min(640, img.width);
+          let displayHeight = (displayWidth / img.width) * img.height;
+          previewCanvas.width = displayWidth;
+          previewCanvas.height = displayHeight;
+          ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
+          uploadContainer.style.display = 'block';
+          selectedRow = null;
+          rowGuide.style.display = 'none';
+          processBtn.disabled = true;
+          $('#rowCoordDisplay').html('Click on the image to set sample row');
+          // Click handler for row selection
+          $(previewCanvas).off('click').on('click', function(event) {
+            let rect = previewCanvas.getBoundingClientRect();
+            let scaleY = previewCanvas.height / rect.height;
+            let mouseY = (event.clientY - rect.top) * scaleY;
+            selectedRow = Math.min(Math.max(Math.floor(mouseY), 0), previewCanvas.height - 1);
+            let yPercent = (selectedRow / previewCanvas.height) * 100;
+            rowGuide.style.display = 'block';
+            rowGuide.style.top = `calc(${yPercent}% + ${previewCanvas.offsetTop}px)`;
+            rowGuide.style.width = `${previewCanvas.clientWidth}px`;
+            $('#rowCoordDisplay').html(`<i class="fa fa-chart-line"></i> Row Y = ${selectedRow} (display pixels). Ready to extract.`);
+            processBtn.disabled = false;
+            // Redraw image and highlight row
+            ctx.drawImage(img, 0, 0, previewCanvas.width, previewCanvas.height);
+            ctx.beginPath();
+            ctx.moveTo(0, selectedRow);
+            ctx.lineTo(previewCanvas.width, selectedRow);
+            ctx.strokeStyle = '#ffcc00';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          });
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    processBtn.addEventListener('click', () => {
+      if (!currentImage || selectedRow === null) {
+        alert('Please select a row by clicking on the image.');
+        return;
+      }
+      // Extract RGB data from the selected row (using original image dimensions)
+      let offCanvas = document.createElement('canvas');
+      offCanvas.width = currentImage.width;
+      offCanvas.height = currentImage.height;
+      let offCtx = offCanvas.getContext('2d');
+      offCtx.drawImage(currentImage, 0, 0);
+      let scaleY = currentImage.height / previewCanvas.height;
+      let originalRow = Math.floor(selectedRow * scaleY);
+      originalRow = Math.min(originalRow, currentImage.height - 1);
+      let rgbData = [];
+      for (let x = 0; x < currentImage.width; x++) {
+        let pixel = offCtx.getImageData(x, originalRow, 1, 1).data;
+        rgbData.push({ r: pixel[0], g: pixel[1], b: pixel[2] });
+      }
+
+      // Build a spectrum object with lines containing r,g,b,average
+      let lines = rgbData.map((pixel, idx) => {
+        let avg = (pixel.r + pixel.g + pixel.b) / 3;
+        return {
+          pixel: idx,
+          r: pixel.r,
+          g: pixel.g,
+          b: pixel.b,
+          average: avg
+        };
+      });
+      let spectrum = new SpectralWorkbench.Spectrum({ data: { lines: lines } });
+
+      // Navigate to plotting step and load the graph
+      stepper.to(4);
+      // Disable the webcam steps to avoid confusion
+      $("#capture-trigger, #setting-trigger, #landing-page-trigger").prop('disabled', true);
+      // Clear previous graph content
+      $('#graph1').empty();
+      let graph = new SpectralWorkbench.Graph({ selector: '#graph1' });
       graph.load(spectrum);
     });
   })
