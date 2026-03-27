@@ -5267,7 +5267,7 @@ SpectralWorkbench.Graph = Class.extend({
       if (_graph.datum instanceof SpectralWorkbench.Spectrum) _graph.datum.setSigFigures();
       // populate the <svg> element with chart data 
       // and provide a binding key
-      _graph.data.datum(_graph.datum.d3);
+      _graph.data.datum(_graph.datum.d3());
 
     }
 
@@ -5434,9 +5434,11 @@ SpectralWorkbench.Graph = Class.extend({
 
       _graph.tagForm = new SpectralWorkbench.UI.TagForm(_graph); 
 
+      var d3data = datum.d3();
+
       /* Enter data into the graph */
       _graph.data = d3.select(_graph.selector + ' svg')  //Select the <svg> element you want to render the chart in.   
-                      .datum(datum.d3)   //Populate the <svg> element with chart data
+                      .datum(d3data)   //Populate the <svg> element with chart data
                       .call(_graph.chart)         //Finally, render the chart!
 
       // create DOM <id> attributes for our lines:
@@ -5448,31 +5450,31 @@ SpectralWorkbench.Graph = Class.extend({
       // http://stackoverflow.com/questions/70579/what-are-valid-values-for-the-id-attribute-in-html
 
       // main graph lines
-      d3.selectAll('g.nv-focus g.nv-line > g > g.nv-groups g')
+      d3.selectAll(_graph.selector + ' g.nv-focus g.nv-line > g > g.nv-groups g')
         //.addClass('main-line') // we should do this (or the d3 equiv.) for later selections. Or if nvd3 offers a ready-made selection
-        .attr("id", function(datum, index) {
-          var id = d3.select('svg').data()[0][index].id; // this is the real d3 DOM-stored data
+        .attr("id", function(d, index) {
+          var id = (d3data && d3data[index]) ? (d3data[index].id || index) : (d ? d.id : index);
           return 'spectrum-line-' + id;
         });
 
       // zoom graph lines
-      d3.selectAll('g.nv-context g.nv-line > g > g.nv-groups g')
-        .attr("id", function(datum, index) {
-          var id = d3.select('svg').data()[0][index].id; // this is the real d3 DOM-stored data
-          return 'spectrum-line-' + id;
+      d3.selectAll(_graph.selector + ' g.nv-context g.nv-line > g > g.nv-groups g')
+        .attr("id", function(d, index) {
+          var id = (d3data && d3data[index]) ? (d3data[index].id || index) : (d ? d.id : index);
+          return 'spectrum-line-context-' + id;
         });
 
       // graph line hover circles for main graph lines
-      d3.selectAll('g.nv-focus g.nv-scatterWrap g.nv-groups g')
-        .attr("id", function(datum, index) {
-          var id = d3.select('svg').data()[0][index].id; // this is the real d3 DOM-stored data
+      d3.selectAll(_graph.selector + ' g.nv-focus g.nv-scatterWrap g.nv-groups g')
+        .attr("id", function(d, index) {
+          var id = (d3data && d3data[index]) ? (d3data[index].id || index) : (d ? d.id : index);
           return 'spectrum-hover-' + id;
         });
 
       // graph line hover circles for zoom graph lines
-      d3.selectAll('g.nv-context g.nv-scatterWrap g.nv-groups g')
-        .attr("id", function(datum, index) {
-          var id = d3.select('svg').data()[0][index].id; // this is the real d3 DOM-stored data
+      d3.selectAll(_graph.selector + ' g.nv-context g.nv-scatterWrap g.nv-groups g')
+        .attr("id", function(d, index) {
+          var id = (d3data && d3data[index]) ? (d3data[index].id || index) : (d ? d.id : index);
           return 'spectrum-hover-' + id;
          });
 
@@ -5641,10 +5643,15 @@ SpectralWorkbench.Graph = Class.extend({
     var _graph = this;
 
     _graph.chart = nv.models.lineWithFocusChart() // this sets up zooming behavior
-                     .options({ useVoronoi: false })
+                     .options({
+                        useVoronoi: false,
+                        useInteractiveGuideline: true,
+                        tooltips: true,
+                        showLegend: true
+                     })
                      .height(_graph.height - _graph.margin.top - _graph.margin.bottom + 100) // 100 for zoom brush pane, hidden by default
                      .margin(_graph.margin)
-                     .showLegend(false)       //Show the legend, allowing users to turn on/off line series.
+                     .showLegend(true)       //Show the legend, allowing users to turn on/off line series.
     ;
 
     _graph.margin.left += 10; // correction after chart init
@@ -5773,7 +5780,7 @@ SpectralWorkbench.Graph = Class.extend({
                     //- _graph.margin.right // right margin not required on image, for some reason
                     - (_graph.embedmargin * 2); // this is 10 * 2
 
-      _graph.el.height(120); // this isn't done later because we mess w/ height, in, for example, calibration
+      // _graph.el.height(120); // this was compressing the graph
 
       if (_graph.datum && _graph.datum.image) _graph.datum.image.updateSize(); // adjust image element and image.container element
 
