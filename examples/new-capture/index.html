@@ -50,6 +50,31 @@
   <link href="new-capture.css" media="all" rel="stylesheet" type="text/css" />
 
   <style>
+    /* ToolPane modal styling */
+    .swb-datum-tool-pane {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #222;
+      color: #eee;
+      padding: 20px;
+      border: 1px solid #444;
+      border-radius: 8px;
+      z-index: 100000;
+      width: 90%;
+      max-width: 800px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    }
+    .swb-datum-tool-pane .title { font-size: 1.5em; margin-bottom: 10px; }
+    .swb-datum-tool-pane .description { margin-bottom: 15px; }
+    .swb-datum-tool-pane .custom { margin-bottom: 15px; }
+    .swb-datum-tool-pane .actions { text-align: right; }
+    .swb-spectrum-img-container { margin-top: 15px; background: #000; padding: 10px; }
+    .calibration-pane { background: #333; padding: 10px; margin-bottom: 10px; border-radius: 4px; }
     /* Upload card styling */
     .upload-card {
       padding: 15px;
@@ -292,7 +317,26 @@
 
       <!-- Plotting (enhanced) -->
       <div id="plotting" class="content center-content" role="tabpanel">
-        Here Is the result plot
+        <div class="swb-datum-tool-pane">
+          <div class="title"></div>
+          <div class="description"></div>
+          <div class="custom"></div>
+          <div class="swb-spectrum-img-container"></div>
+          <div class="actions">
+            <button class="btn btn-default cancel">Close</button>
+            <button class="btn btn-primary btn-apply">Apply</button>
+          </div>
+          <form style="display:none;"><input class="input-choose-spectrum"><select class="select-author"></select></form>
+          <div class="results" style="display:none;"></div>
+          <div class="attribution" style="display:none;"><a class="author"></a><a class="link"></a></div>
+        </div>
+        <div class="toolbar" style="margin-bottom: 10px;">
+          <button class="btn btn-default" id="btn-calibrate"><i class="fa fa-crosshairs"></i> Calibrate</button>
+          <button class="btn btn-default" id="btn-find-peaks"><i class="fa fa-magic"></i> Auto-Find Peaks</button>
+          <button class="btn btn-default" id="btn-add-peak"><i class="fa fa-plus"></i> Add Peak Label</button>
+          <button class="btn btn-default" id="btn-export-csv"><i class="fa fa-download"></i> Export CSV</button>
+          <button class="btn btn-danger" id="btn-clear-peaks"><i class="fa fa-trash"></i> Clear Peaks</button>
+        </div>
         <div class="swb-graphing center-content">
           <div id="graph1"></div>
         </div>
@@ -301,7 +345,8 @@
           to select the target region span. User could also move the span in the navigator
         </div>
         <div class="legend-note">
-          <i class="fa fa-info-circle"></i> Click on the legend labels to show/hide each line.
+          <i class="fa fa-info-circle"></i> Click on the legend labels to show/hide each line. <br>
+          <i class="fa fa-info-circle"></i> Click on peak labels to remove them.
         </div>
         <button class="demo-button" id="restart" style="margin-top: 1em">Restart</button>
         <script>
@@ -351,7 +396,11 @@
         average: avg
       };
     });
-    return new SpectralWorkbench.Spectrum({ data: { lines: lines } });
+    return new SpectralWorkbench.Spectrum({
+      id: "captured-" + Date.now(),
+      title: "Captured Spectrum",
+      data: { lines: lines }
+    });
   }
 
   $(document).ready(function () {
@@ -371,6 +420,45 @@
     $("#setting-trigger").on('click', function () { stepper.to(2); });
     $("#setting-page-next").on('click', function () { stepper.to(3); });
     $("#capture-trigger").on('click', function () { stepper.to(3); });
+
+    window.finalGraph = null;
+
+    window.initializeFinalPlot = function(pixels) {
+      var spectrum = createRGBSpectrum(pixels);
+      // Clear previous graph content
+      var graphContainer = $('#graph1');
+      graphContainer.empty();
+      finalGraph = new SpectralWorkbench.Graph({ selector: '#graph1' });
+      finalGraph.load(spectrum);
+
+      // Export CSV
+      finalGraph.datum.downloadCSV('#btn-export-csv');
+
+      // Auto-find peaks
+      $('#btn-find-peaks').off('click').on('click', function() {
+        finalGraph.findPeaks();
+      });
+
+      // Clear peaks
+      $('#btn-clear-peaks').off('click').on('click', function() {
+        finalGraph.peakLabels = [];
+        finalGraph.renderPeakLabels();
+      });
+
+      // Add manual peak
+      $('#btn-add-peak').off('click').on('click', function() {
+        var wavelength = prompt("Enter approximate wavelength/pixel to label:");
+        if (wavelength !== null) {
+          var label = prompt("Enter label (optional, defaults to wavelength):");
+          finalGraph.addManualPeakLabel(parseFloat(wavelength), label);
+        }
+      });
+
+      // Calibrate
+      $('#btn-calibrate').off('click').on('click', function() {
+        new SpectralWorkbench.UI.ToolPane('calibrate2', finalGraph);
+      });
+    }
 
     // Capture page next: get captured row data
     $("#capture-page-next").on('click', function () {
@@ -396,12 +484,7 @@
         }
       });
 
-      var spectrum = createRGBSpectrum(pixels);
-      // Clear previous graph content
-      var graphContainer = $('#graph1');
-      graphContainer.empty();
-      var graph = new SpectralWorkbench.Graph({ selector: '#graph1' });
-      graph.load(spectrum);
+      initializeFinalPlot(pixels);
     });
 
     // Plot trigger (when user clicks plotting step manually)
@@ -419,10 +502,7 @@
             return { r: val, g: val, b: val };
           }
         });
-        var spectrum = createRGBSpectrum(pixels);
-        $('#graph1').empty();
-        var graph = new SpectralWorkbench.Graph({ selector: '#graph1' });
-        graph.load(spectrum);
+        initializeFinalPlot(pixels);
       }
     });
 
@@ -504,12 +584,9 @@
         pixels.push({ r: pixel[0], g: pixel[1], b: pixel[2] });
       }
 
-      let spectrum = createRGBSpectrum(pixels);
       stepper.to(4);
       $("#capture-trigger, #setting-trigger, #landing-page-trigger").prop('disabled', true);
-      $('#graph1').empty();
-      let graph = new SpectralWorkbench.Graph({ selector: '#graph1' });
-      graph.load(spectrum);
+      initializeFinalPlot(pixels);
     });
   });
 </script>

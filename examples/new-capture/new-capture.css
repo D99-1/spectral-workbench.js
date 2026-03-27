@@ -119,7 +119,7 @@ div.bs-stepper-content {
 }
 
 .bs-stepper .content.fade.active, .bs-stepper-pane.fade.active {
-  z-index: 90;
+  z-index: 10;
 }
 
 .bs-stepper .line {

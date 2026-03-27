@@ -153,6 +153,36 @@ SpectralWorkbench.Spectrum = SpectralWorkbench.Datum.extend({
 
 
     /* ======================================
+     * Prepares a CSV formatted data in range
+     * including all channels, wavelength, and pixel
+     */
+    _spectrum.encodeFullCSV = function() {
+
+      var lines = [];
+      var header = "Wavelength,Pixel,Average,Red,Green,Blue";
+      lines.push(header);
+
+      _spectrum.average.forEach(function(line, i) {
+        var wavelength = _spectrum.isCalibrated() ? _spectrum.average[i].x : "";
+        var pixel = _spectrum.isCalibrated() ? i : _spectrum.average[i].x; // if not calibrated, x is pixel
+
+        var row = [
+          wavelength,
+          pixel,
+          +(_spectrum.average[i].y * 255).toPrecision(_spectrum.sigFigIntensity),
+          +(_spectrum.red[i].y * 255).toPrecision(_spectrum.sigFigIntensity),
+          +(_spectrum.green[i].y * 255).toPrecision(_spectrum.sigFigIntensity),
+          +(_spectrum.blue[i].y * 255).toPrecision(_spectrum.sigFigIntensity)
+        ];
+        lines.push(row.join(','));
+      });
+
+      return lines.join('\n');
+
+    }
+
+
+    /* ======================================
      * Prepares a server-ready formatted JSON object of 
      * currently displayed data based on spectrum.average/red/green/blue
      */

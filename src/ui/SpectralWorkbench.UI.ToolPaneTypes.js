@@ -267,8 +267,10 @@ SpectralWorkbench.UI.ToolPaneTypes = {
 
       $('.calibration-pane').remove();
 
-      form.graph.datum.image.el.height(100); // return it to full height
-      form.graph.datum.image.container.height(100);
+      if (form.graph.datum.image) {
+        if (form.graph.datum.image.el) form.graph.datum.image.el.height(100); // return it to full height
+        if (form.graph.datum.image.container) form.graph.datum.image.container.height(100);
+      }
 
     },
     setup: function(form) {
@@ -286,7 +288,9 @@ SpectralWorkbench.UI.ToolPaneTypes = {
 
       }
 
-      form.graph.datum.image.container.height(180); // we should move away from hard-coded height, but couldn't make the below work:
+      if (form.graph.datum.image && form.graph.datum.image.container) {
+        form.graph.datum.image.container.height(180); // we should move away from hard-coded height, but couldn't make the below work:
+      }
       //form.graph.datum.image.container.height(_graph.datum.image.container.height() + 80);
 
       // Using reference image from 
@@ -334,8 +338,8 @@ SpectralWorkbench.UI.ToolPaneTypes = {
         var widthAsCalibrated = _graph.datum.json.data.lines.length; // sometimes calibration was run on a lower-res image; we are transitioning away from this
             auto_cal = SpectralWorkbench.API.Core.attemptCalibration(_graph), // [r,g,b] in terms of width of json stored image data
             // convert to display space from image space:
-            blue2guess  = _graph.datum.image.container.width() * (auto_cal[2] / widthAsCalibrated),
-            green2guess = _graph.datum.image.container.width() * (auto_cal[1] / widthAsCalibrated);
+            blue2guess  = (_graph.datum.image && _graph.datum.image.container) ? _graph.datum.image.container.width() * (auto_cal[2] / widthAsCalibrated) : _graph.width * (auto_cal[2] / widthAsCalibrated),
+            green2guess = (_graph.datum.image && _graph.datum.image.container) ? _graph.datum.image.container.width() * (auto_cal[1] / widthAsCalibrated) : _graph.width * (auto_cal[1] / widthAsCalibrated);
 
         calibrationResize(blue2guess, green2guess);
 
@@ -446,26 +450,16 @@ SpectralWorkbench.UI.ToolPaneTypes = {
         _graph.datum.getPowerTag('linearCalibration', function(tag) { tag.destroy() });
 
         _graph.dim();
-        _graph.datum.addAndUploadTag('linearCalibration:' + 
-          $('.input-wavelength-1').val() + '-' + 
-          $('.input-wavelength-2').val(),
-          function() {
+        var lines = _graph.datum.calibrate(blue2, green2, $('.input-wavelength-1').val(), $('.input-wavelength-2').val());
+        _graph.datum.json.data.lines = lines;
+        _graph.datum.load();
+        _graph.reload_and_refresh();
+        _graph.undim();
 
-            _graph.datum.load();
+        if (_graph.UI) _graph.UI.notify("Calibration applied.", "success");
 
-            _graph.UI.notify("Your new calibration has been saved.", "success");
-
-            // save the calculated error (from the rmse)
-            _graph.datum.addTag('error:' + error);
-  
-            if      (Math.abs(error) < 12) _graph.datum.addTag('calibrationQuality:good');
-            else if (Math.abs(error) < 16) _graph.datum.addTag('calibrationQuality:medium');
-            else                           _graph.datum.addTag('calibrationQuality:poor');
-  
-            form.close();
-            $('.calibration-pane').remove();
-       
-        });
+        form.close();
+        $('.calibration-pane').remove();
 
       }
 
@@ -475,8 +469,8 @@ SpectralWorkbench.UI.ToolPaneTypes = {
       // if these are outside the currently
       // displayed range, limit them:
       var limitRange = function(x) {
-
-        if (x > _graph.datum.image.container.width()) x = _graph.datum.image.container.width();
+        var maxWidth = (_graph.datum.image && _graph.datum.image.container) ? _graph.datum.image.container.width() : _graph.width;
+        if (x > maxWidth) x = maxWidth;
         if (x < 0) x = 0;
         return x;
 

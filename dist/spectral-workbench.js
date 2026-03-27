@@ -427,6 +427,22 @@ SpectralWorkbench.Datum = Class.extend({
 
 
     /* ======================================
+     * Turns <a> link with specified selector into a download
+     * link for the currently viewed data, as a CSV file
+     */
+    _datum.downloadCSV = function(selector) {
+
+      $(selector).click(function() {
+
+        $(this).attr('download','spectralwb-' + _datum.id + '.csv')
+               .attr('href','data:application/csv;utf8,'+encodeURIComponent(_datum.encodeFullCSV()));
+
+      });
+
+    }
+
+
+    /* ======================================
      * Returns simple JSON array of pixels, in format:
      * { r: 0, g: 0, b: 0, average: 0, wavelength: 0 }
      */
@@ -940,6 +956,36 @@ SpectralWorkbench.Spectrum = SpectralWorkbench.Datum.extend({
         lines[lines.length - 1] += ',' + +(_spectrum.average[i].y * 255).toPrecision(_spectrum.sigFigIntensity);
         
       }); 
+
+      return lines.join('\n');
+
+    }
+
+
+    /* ======================================
+     * Prepares a CSV formatted data in range
+     * including all channels, wavelength, and pixel
+     */
+    _spectrum.encodeFullCSV = function() {
+
+      var lines = [];
+      var header = "Wavelength,Pixel,Average,Red,Green,Blue";
+      lines.push(header);
+
+      _spectrum.average.forEach(function(line, i) {
+        var wavelength = _spectrum.isCalibrated() ? _spectrum.average[i].x : "";
+        var pixel = _spectrum.isCalibrated() ? i : _spectrum.average[i].x; // if not calibrated, x is pixel
+
+        var row = [
+          wavelength,
+          pixel,
+          +(_spectrum.average[i].y * 255).toPrecision(_spectrum.sigFigIntensity),
+          +(_spectrum.red[i].y * 255).toPrecision(_spectrum.sigFigIntensity),
+          +(_spectrum.green[i].y * 255).toPrecision(_spectrum.sigFigIntensity),
+          +(_spectrum.blue[i].y * 255).toPrecision(_spectrum.sigFigIntensity)
+        ];
+        lines.push(row.join(','));
+      });
 
       return lines.join('\n');
 
@@ -1676,6 +1722,40 @@ SpectralWorkbench.Set = SpectralWorkbench.Datum.extend({
       });
 
       return json;
+
+    }
+
+
+    /* ======================================
+     * Prepares a CSV formatted data in range
+     * including all spectra, all channels, wavelength, and pixel
+     */
+    set.encodeFullCSV = function() {
+
+      var lines = [];
+      var header = "SpectrumID,SpectrumTitle,Wavelength,Pixel,Average,Red,Green,Blue";
+      lines.push(header);
+
+      set.spectra.forEach(function(spectrum) {
+        spectrum.average.forEach(function(line, i) {
+          var wavelength = spectrum.isCalibrated() ? spectrum.average[i].x : "";
+          var pixel = spectrum.isCalibrated() ? i : spectrum.average[i].x; // if not calibrated, x is pixel
+
+          var row = [
+            spectrum.id,
+            spectrum.title,
+            wavelength,
+            pixel,
+            +(spectrum.average[i].y * 255).toPrecision(spectrum.sigFigIntensity),
+            +(spectrum.red[i].y * 255).toPrecision(spectrum.sigFigIntensity),
+            +(spectrum.green[i].y * 255).toPrecision(spectrum.sigFigIntensity),
+            +(spectrum.blue[i].y * 255).toPrecision(spectrum.sigFigIntensity)
+          ];
+          lines.push(row.join(','));
+        });
+      });
+
+      return lines.join('\n');
 
     }
 
@@ -4282,8 +4362,10 @@ SpectralWorkbench.UI.ToolPaneTypes = {
 
       $('.calibration-pane').remove();
 
-      form.graph.datum.image.el.height(100); // return it to full height
-      form.graph.datum.image.container.height(100);
+      if (form.graph.datum.image) {
+        if (form.graph.datum.image.el) form.graph.datum.image.el.height(100); // return it to full height
+        if (form.graph.datum.image.container) form.graph.datum.image.container.height(100);
+      }
 
     },
     setup: function(form) {
@@ -4301,7 +4383,9 @@ SpectralWorkbench.UI.ToolPaneTypes = {
 
       }
 
-      form.graph.datum.image.container.height(180); // we should move away from hard-coded height, but couldn't make the below work:
+      if (form.graph.datum.image && form.graph.datum.image.container) {
+        form.graph.datum.image.container.height(180); // we should move away from hard-coded height, but couldn't make the below work:
+      }
       //form.graph.datum.image.container.height(_graph.datum.image.container.height() + 80);
 
       // Using reference image from 
@@ -4349,8 +4433,8 @@ SpectralWorkbench.UI.ToolPaneTypes = {
         var widthAsCalibrated = _graph.datum.json.data.lines.length; // sometimes calibration was run on a lower-res image; we are transitioning away from this
             auto_cal = SpectralWorkbench.API.Core.attemptCalibration(_graph), // [r,g,b] in terms of width of json stored image data
             // convert to display space from image space:
-            blue2guess  = _graph.datum.image.container.width() * (auto_cal[2] / widthAsCalibrated),
-            green2guess = _graph.datum.image.container.width() * (auto_cal[1] / widthAsCalibrated);
+            blue2guess  = (_graph.datum.image && _graph.datum.image.container) ? _graph.datum.image.container.width() * (auto_cal[2] / widthAsCalibrated) : _graph.width * (auto_cal[2] / widthAsCalibrated),
+            green2guess = (_graph.datum.image && _graph.datum.image.container) ? _graph.datum.image.container.width() * (auto_cal[1] / widthAsCalibrated) : _graph.width * (auto_cal[1] / widthAsCalibrated);
 
         calibrationResize(blue2guess, green2guess);
 
@@ -4461,26 +4545,16 @@ SpectralWorkbench.UI.ToolPaneTypes = {
         _graph.datum.getPowerTag('linearCalibration', function(tag) { tag.destroy() });
 
         _graph.dim();
-        _graph.datum.addAndUploadTag('linearCalibration:' + 
-          $('.input-wavelength-1').val() + '-' + 
-          $('.input-wavelength-2').val(),
-          function() {
+        var lines = _graph.datum.calibrate(blue2, green2, $('.input-wavelength-1').val(), $('.input-wavelength-2').val());
+        _graph.datum.json.data.lines = lines;
+        _graph.datum.load();
+        _graph.reload_and_refresh();
+        _graph.undim();
 
-            _graph.datum.load();
+        if (_graph.UI) _graph.UI.notify("Calibration applied.", "success");
 
-            _graph.UI.notify("Your new calibration has been saved.", "success");
-
-            // save the calculated error (from the rmse)
-            _graph.datum.addTag('error:' + error);
-  
-            if      (Math.abs(error) < 12) _graph.datum.addTag('calibrationQuality:good');
-            else if (Math.abs(error) < 16) _graph.datum.addTag('calibrationQuality:medium');
-            else                           _graph.datum.addTag('calibrationQuality:poor');
-  
-            form.close();
-            $('.calibration-pane').remove();
-       
-        });
+        form.close();
+        $('.calibration-pane').remove();
 
       }
 
@@ -4490,8 +4564,8 @@ SpectralWorkbench.UI.ToolPaneTypes = {
       // if these are outside the currently
       // displayed range, limit them:
       var limitRange = function(x) {
-
-        if (x > _graph.datum.image.container.width()) x = _graph.datum.image.container.width();
+        var maxWidth = (_graph.datum.image && _graph.datum.image.container) ? _graph.datum.image.container.width() : _graph.width;
+        if (x > maxWidth) x = maxWidth;
         if (x < 0) x = 0;
         return x;
 
@@ -4793,7 +4867,6 @@ SpectralWorkbench.UI.ToolPane = Class.extend({
       form.applyEl.click(function(e) {
         form.applyEl.html("<i class='fa fa-spinner fa-spin fa-white'></i>");
         _tool.options.onApply.bind(this)(form);
-        form.close();
       });
     }
 
@@ -5161,6 +5234,7 @@ SpectralWorkbench.Graph = Class.extend({
     _graph.el = $(_graph.selector);
 
     _graph.API = new SpectralWorkbench.API(this);
+    _graph.peakLabels = [];
 
     // set/spectrum breakout
     if (_graph.args.hasOwnProperty('spectrum_id')) {
@@ -5187,7 +5261,7 @@ SpectralWorkbench.Graph = Class.extend({
       if (_graph.datum instanceof SpectralWorkbench.Spectrum) _graph.datum.setSigFigures();
       // populate the <svg> element with chart data 
       // and provide a binding key
-      _graph.data.datum(_graph.datum.d3);
+      _graph.data.datum(_graph.datum.d3());
 
     }
 
@@ -5354,9 +5428,11 @@ SpectralWorkbench.Graph = Class.extend({
 
       _graph.tagForm = new SpectralWorkbench.UI.TagForm(_graph); 
 
+      var d3data = datum.d3();
+
       /* Enter data into the graph */
       _graph.data = d3.select(_graph.selector + ' svg')  //Select the <svg> element you want to render the chart in.   
-                      .datum(datum.d3)   //Populate the <svg> element with chart data
+                      .datum(d3data)   //Populate the <svg> element with chart data
                       .call(_graph.chart)         //Finally, render the chart!
 
       // create DOM <id> attributes for our lines:
@@ -5368,31 +5444,31 @@ SpectralWorkbench.Graph = Class.extend({
       // http://stackoverflow.com/questions/70579/what-are-valid-values-for-the-id-attribute-in-html
 
       // main graph lines
-      d3.selectAll('g.nv-focus g.nv-line > g > g.nv-groups g') 
+      d3.selectAll(_graph.selector + ' g.nv-focus g.nv-line > g > g.nv-groups g')
         //.addClass('main-line') // we should do this (or the d3 equiv.) for later selections. Or if nvd3 offers a ready-made selection
-        .attr("id", function(datum, index) {
-          var id = d3.select('svg').data()[0][index].id; // this is the real d3 DOM-stored data
+        .attr("id", function(d, index) {
+          var id = (d3data && d3data[index]) ? (d3data[index].id || index) : (d ? d.id : index);
           return 'spectrum-line-' + id;
         });
 
       // zoom graph lines
-      d3.selectAll('g.nv-context g.nv-line > g > g.nv-groups g') 
-        .attr("id", function(datum, index) {
-          var id = d3.select('svg').data()[0][index].id; // this is the real d3 DOM-stored data
+      d3.selectAll(_graph.selector + ' g.nv-context g.nv-line > g > g.nv-groups g')
+        .attr("id", function(d, index) {
+          var id = (d3data && d3data[index]) ? (d3data[index].id || index) : (d ? d.id : index);
           return 'spectrum-line-' + id;
         });
 
       // graph line hover circles for main graph lines
-      d3.selectAll('g.nv-focus g.nv-scatterWrap g.nv-groups g') 
-        .attr("id", function(datum, index) {
-          var id = d3.select('svg').data()[0][index].id; // this is the real d3 DOM-stored data
+      d3.selectAll(_graph.selector + ' g.nv-focus g.nv-scatterWrap g.nv-groups g')
+        .attr("id", function(d, index) {
+          var id = (d3data && d3data[index]) ? (d3data[index].id || index) : (d ? d.id : index);
           return 'spectrum-hover-' + id;
         });
 
       // graph line hover circles for zoom graph lines
-      d3.selectAll('g.nv-context g.nv-scatterWrap g.nv-groups g') 
-        .attr("id", function(datum, index) {
-          var id = d3.select('svg').data()[0][index].id; // this is the real d3 DOM-stored data
+      d3.selectAll(_graph.selector + ' g.nv-context g.nv-scatterWrap g.nv-groups g')
+        .attr("id", function(d, index) {
+          var id = (d3data && d3data[index]) ? (d3data[index].id || index) : (d ? d.id : index);
           return 'spectrum-hover-' + id;
          });
 
@@ -5503,10 +5579,125 @@ SpectralWorkbench.Graph = Class.extend({
       });
       
       _graph.data = d3.select(_graph.selector + ' svg')  //Select the <svg> element you want to render the chart in.   
-            .datum(_graph.datum.d3)   //Populate the <svg> element with chart data and provide a binding key (removing idKey has no effect?)
+            .datum(_graph.datum.d3())   //Populate the <svg> element with chart data and provide a binding key (removing idKey has no effect?)
 
       _graph.updateSize()();
  
+    }
+
+
+    /* ======================================
+     * Automatically find and label peaks in the current spectrum.
+     */
+    _graph.findPeaks = function(threshold, distance) {
+
+      threshold = threshold || 0.1;
+      distance = distance || 20;
+      var peaks = [];
+      var data = _graph.datum.average;
+
+      if (!data || data.length === 0) return;
+
+      for (var i = distance; i < data.length - distance; i++) {
+        var isPeak = true;
+        if (data[i].y < threshold) isPeak = false;
+
+        if (isPeak) {
+          for (var j = i - distance; j <= i + distance; j++) {
+            if (i !== j && data[j].y > data[i].y) {
+              isPeak = false;
+              break;
+            }
+          }
+        }
+
+        if (isPeak) {
+          peaks.push(data[i]);
+          i += distance; // Skip ahead
+        }
+      }
+
+      peaks.forEach(function(peak) {
+        _graph.addPeakLabel(peak.x, peak.y, peak.x.toFixed(1));
+      });
+
+    }
+
+
+    /* ======================================
+     * Manually add a peak label near a given x-coordinate.
+     */
+    _graph.addManualPeakLabel = function(x, label) {
+
+      var peakWavelength = _graph.datum.getNearbyPeak(x, 10);
+      var point = _graph.datum.getNearestPoint(peakWavelength);
+      _graph.addPeakLabel(point.x, point.y, label || point.x.toFixed(1));
+
+    }
+
+
+    /* ======================================
+     * Add a label to the graph at a specific point.
+     */
+    _graph.addPeakLabel = function(x, y, label) {
+
+      var id = 'peak-label-' + Math.random().toString(36).substr(2, 9);
+      _graph.peakLabels.push({ id: id, x: x, y: y, label: label });
+      _graph.renderPeakLabels();
+
+    }
+
+
+    /* ======================================
+     * Render all peak labels onto the SVG.
+     */
+    _graph.renderPeakLabels = function() {
+
+      if (!_graph.chart || !_graph.chart.yAxis || !_graph.chart.xAxis || !_graph.datum) return;
+
+      var labels = _graph.svg.selectAll('.peak-label')
+        .data(_graph.peakLabels, function(d) { return d.id; });
+
+      var enter = labels.enter().append('g')
+        .attr('class', 'peak-label')
+        .style('cursor', 'pointer')
+        .on('click', function(d) {
+          _graph.peakLabels = _graph.peakLabels.filter(function(l) { return l.id !== d.id; });
+          _graph.renderPeakLabels();
+          d3.event.stopPropagation();
+        });
+
+      enter.append('line')
+        .attr('x1', 0).attr('y1', 0)
+        .attr('x2', 0).attr('y2', -20)
+        .attr('stroke', '#ffcc00')
+        .attr('stroke-width', 2);
+
+      enter.append('text')
+        .attr('x', 0).attr('y', -25)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#ffcc00')
+        .attr('font-weight', 'bold')
+        .attr('font-size', '12px')
+        .text(function(d) { return d.label; });
+
+      enter.append('circle')
+        .attr('r', 4)
+        .attr('fill', '#ffcc00')
+        .attr('stroke', '#000')
+        .attr('stroke-width', 1);
+
+      var yScale = (_graph.chart.focus && _graph.chart.focus.yScale) ? _graph.chart.focus.yScale() : (_graph.chart.yScale ? _graph.chart.yScale() : null);
+      var xScale = (_graph.chart.focus && _graph.chart.focus.xScale) ? _graph.chart.focus.xScale() : (_graph.chart.xScale ? _graph.chart.xScale() : null);
+
+      if (xScale && yScale) {
+        labels.attr('transform', function(d) {
+           return 'translate(' + (xScale(d.x) + _graph.margin.left) + ',' + (yScale(d.y) + _graph.margin.top) + ')';
+        });
+      }
+
+      labels.exit().remove();
+
     }
 
 
@@ -5564,7 +5755,7 @@ SpectralWorkbench.Graph = Class.extend({
                      .options({ useVoronoi: false })
                      .height(_graph.height - _graph.margin.top - _graph.margin.bottom + 100) // 100 for zoom brush pane, hidden by default
                      .margin(_graph.margin)
-                     .showLegend(false)       //Show the legend, allowing users to turn on/off line series.
+                     .showLegend(true)       //Show the legend, allowing users to turn on/off line series.
     ;
 
     _graph.margin.left += 10; // correction after chart init
@@ -5707,6 +5898,7 @@ SpectralWorkbench.Graph = Class.extend({
       // update only if we're past initialization
       if (_graph.chart) {
         _graph.chart.update();
+        _graph.renderPeakLabels();
       }
 
     });

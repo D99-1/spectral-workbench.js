@@ -31,6 +31,22 @@ SpectralWorkbench.Datum = Class.extend({
 
 
     /* ======================================
+     * Turns <a> link with specified selector into a download
+     * link for the currently viewed data, as a CSV file
+     */
+    _datum.downloadCSV = function(selector) {
+
+      $(selector).click(function() {
+
+        $(this).attr('download','spectralwb-' + _datum.id + '.csv')
+               .attr('href','data:application/csv;utf8,'+encodeURIComponent(_datum.encodeFullCSV()));
+
+      });
+
+    }
+
+
+    /* ======================================
      * Returns simple JSON array of pixels, in format:
      * { r: 0, g: 0, b: 0, average: 0, wavelength: 0 }
      */

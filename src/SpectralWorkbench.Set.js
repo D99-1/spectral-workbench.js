@@ -68,6 +68,40 @@ SpectralWorkbench.Set = SpectralWorkbench.Datum.extend({
 
 
     /* ======================================
+     * Prepares a CSV formatted data in range
+     * including all spectra, all channels, wavelength, and pixel
+     */
+    set.encodeFullCSV = function() {
+
+      var lines = [];
+      var header = "SpectrumID,SpectrumTitle,Wavelength,Pixel,Average,Red,Green,Blue";
+      lines.push(header);
+
+      set.spectra.forEach(function(spectrum) {
+        spectrum.average.forEach(function(line, i) {
+          var wavelength = spectrum.isCalibrated() ? spectrum.average[i].x : "";
+          var pixel = spectrum.isCalibrated() ? i : spectrum.average[i].x; // if not calibrated, x is pixel
+
+          var row = [
+            spectrum.id,
+            spectrum.title,
+            wavelength,
+            pixel,
+            +(spectrum.average[i].y * 255).toPrecision(spectrum.sigFigIntensity),
+            +(spectrum.red[i].y * 255).toPrecision(spectrum.sigFigIntensity),
+            +(spectrum.green[i].y * 255).toPrecision(spectrum.sigFigIntensity),
+            +(spectrum.blue[i].y * 255).toPrecision(spectrum.sigFigIntensity)
+          ];
+          lines.push(row.join(','));
+        });
+      });
+
+      return lines.join('\n');
+
+    }
+
+
+    /* ======================================
      * Returns [min, max] x-axis extent across all
      * member spectra in wavelength nanometers,
      * without applying wavelength range limits.
