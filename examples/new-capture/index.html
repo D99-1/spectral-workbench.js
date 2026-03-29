@@ -300,7 +300,9 @@
         </div>
         <div id="plotting-note">
           Use the bottom graph as the navigator to zoom into any section of the plot by dragging
-          to select the target region span. User could also move the span in the navigator
+          to select the target region span. User could also move the span in the navigator.
+          <br><br>
+          <b>Note:</b> In the CSV export, the "Wavelength" column will be empty for uncalibrated spectra.
         </div>
         <button class="demo-button" id="restart" style="margin-top: 1em">Restart</button>
         <script>
@@ -389,6 +391,11 @@
       graphContainer.empty();
       finalGraph = new SpectralWorkbench.Graph({ selector: '#graph1' });
       finalGraph.load(spectrum);
+
+      // Ensure graph is correctly sized after potential layout transitions
+      setTimeout(function() {
+        if (finalGraph) finalGraph.updateSize()();
+      }, 300);
 
       // Export CSV
       finalGraph.datum.downloadCSV('#btn-export-csv');

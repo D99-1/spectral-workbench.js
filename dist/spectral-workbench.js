@@ -5818,6 +5818,8 @@ SpectralWorkbench.Graph = Class.extend({
                     //- _graph.margin.right // right margin not required on image, for some reason
                     - (_graph.embedmargin * 2); // this is 10 * 2
 
+      if (_graph.svg) _graph.svg.attr("width", _graph.width + _graph.margin.left + _graph.margin.right);
+
       if (_graph.datum && _graph.datum.image) _graph.datum.image.updateSize(); // adjust image element and image.container element
 
       if (_graph.datum) {
