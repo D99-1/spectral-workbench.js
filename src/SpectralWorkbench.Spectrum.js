@@ -824,17 +824,20 @@ SpectralWorkbench.Spectrum = SpectralWorkbench.Datum.extend({
         {
           values: _spectrum.red,
           key:    _spectrum.title+" (R)",
-          color:  'rgba(255,0,0,0.2)'
+          color:  'rgba(255,0,0,0.2)',
+          id:     _spectrum.id
         },
         {
           values: _spectrum.green,
           key:    _spectrum.title+" (G)",
-          color:  'rgba(0,255,0,0.2)'
+          color:  'rgba(0,255,0,0.2)',
+          id:     _spectrum.id
         },
         {
           values: _spectrum.blue,
           key:    _spectrum.title+" (B)",
-          color:  'rgba(0,0,255,0.2)'
+          color:  'rgba(0,0,255,0.2)',
+          id:     _spectrum.id
         }
       ];
 

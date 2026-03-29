@@ -36,15 +36,16 @@ SpectralWorkbench.Datum = Class.extend({
      */
     _datum.downloadCSV = function(selector) {
 
-      $(selector).click(function(e) {
+      $(selector).off('click').on('click', function(e) {
 
         var csvContent = _datum.encodeFullCSV();
         var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         var url = URL.createObjectURL(blob);
         var link = document.createElement("a");
+        var id = _datum.id || 'unnamed';
 
         link.setAttribute("href", url);
-        link.setAttribute("download", 'spectralwb-' + _datum.id + '.csv');
+        link.setAttribute("download", 'spectralwb-' + id + '.csv');
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

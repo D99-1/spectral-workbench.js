@@ -4,7 +4,7 @@ SpectralWorkbench.API.Legacy = {
 
   load: function(json, dataType) {
     // provide backward compatability for API v1
-    if ($W && $W.data) {
+    if ($W) {
 
       // formatting of $W.data in API v1 is not same as vanilla JSON
       $W.data = [];
@@ -25,7 +25,12 @@ SpectralWorkbench.API.Legacy = {
 
       } else if (dataType == "spectrum") {
 
-        $W.data = json;
+        $W.data = [{ data: [] }];
+        if (json.data && json.data.lines) {
+          $.each(json.data.lines, function(i, line) {
+            $W.data[0].data.push([line.wavelength || line.pixel || i, line.average]);
+          });
+        }
 
       }
 
@@ -37,6 +42,8 @@ SpectralWorkbench.API.Legacy = {
 
     // override flot graphing
     $.plot = function(el,data,options) {
+
+      if (!_graph.datum) return;
 
       // do this differently for sets and spectra
       if (_graph.dataType == 'set') {
@@ -74,26 +81,28 @@ SpectralWorkbench.API.Legacy = {
         _graph.datum.json.data.lines = [];
         _graph.datum.average = [];
         
-        $.each(_graph.datum.json.data,function(i,line) {
+        if (data && data[0] && data[0].data) {
+          $.each(data[0].data,function(i,line) {
 
-          var average = line[1];
-          if (average <= 1) average *= 100; // if it's too low, auto-recognize that it's a percentage? This is not great. 
+            var average = line[1];
+            if (average <= 1) average *= 100; // if it's too low, auto-recognize that it's a percentage? This is not great.
 
-          _graph.datum.json.data.lines.push({
-            wavelength: line[0],
-            average: average 
+            _graph.datum.json.data.lines.push({
+              wavelength: line[0],
+              average: average
+            });
+
           });
-
           // and then reload that into its native data store, too, 
           // in spectrum.average = {y: 0, x: 0}
           _graph.datum.load(_graph.datum.json.data.lines);
-
-        });
+        }
 
       }
 
       // then display it in d3:
-      _graph.load(_graph.datum, _graph.chart);
+      if (_graph.loaded) _graph.reload_and_refresh();
+      else _graph.load(_graph.datum, _graph.chart);
 
     }
 

@@ -432,15 +432,16 @@ SpectralWorkbench.Datum = Class.extend({
      */
     _datum.downloadCSV = function(selector) {
 
-      $(selector).click(function(e) {
+      $(selector).off('click').on('click', function(e) {
 
         var csvContent = _datum.encodeFullCSV();
         var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         var url = URL.createObjectURL(blob);
         var link = document.createElement("a");
+        var id = _datum.id || 'unnamed';
 
         link.setAttribute("href", url);
-        link.setAttribute("download", 'spectralwb-' + _datum.id + '.csv');
+        link.setAttribute("download", 'spectralwb-' + id + '.csv');
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -1647,17 +1648,20 @@ SpectralWorkbench.Spectrum = SpectralWorkbench.Datum.extend({
         {
           values: _spectrum.red,
           key:    _spectrum.title+" (R)",
-          color:  'rgba(255,0,0,0.2)'
+          color:  'rgba(255,0,0,0.2)',
+          id:     _spectrum.id
         },
         {
           values: _spectrum.green,
           key:    _spectrum.title+" (G)",
-          color:  'rgba(0,255,0,0.2)'
+          color:  'rgba(0,255,0,0.2)',
+          id:     _spectrum.id
         },
         {
           values: _spectrum.blue,
           key:    _spectrum.title+" (B)",
-          color:  'rgba(0,0,255,0.2)'
+          color:  'rgba(0,0,255,0.2)',
+          id:     _spectrum.id
         }
       ];
 
@@ -2733,7 +2737,7 @@ SpectralWorkbench.API.Legacy = {
 
   load: function(json, dataType) {
     // provide backward compatability for API v1
-    if ($W && $W.data) {
+    if ($W) {
 
       // formatting of $W.data in API v1 is not same as vanilla JSON
       $W.data = [];
@@ -2754,7 +2758,12 @@ SpectralWorkbench.API.Legacy = {
 
       } else if (dataType == "spectrum") {
 
-        $W.data = json;
+        $W.data = [{ data: [] }];
+        if (json.data && json.data.lines) {
+          $.each(json.data.lines, function(i, line) {
+            $W.data[0].data.push([line.wavelength || line.pixel || i, line.average]);
+          });
+        }
 
       }
 
@@ -2766,6 +2775,8 @@ SpectralWorkbench.API.Legacy = {
 
     // override flot graphing
     $.plot = function(el,data,options) {
+
+      if (!_graph.datum) return;
 
       // do this differently for sets and spectra
       if (_graph.dataType == 'set') {
@@ -2803,26 +2814,28 @@ SpectralWorkbench.API.Legacy = {
         _graph.datum.json.data.lines = [];
         _graph.datum.average = [];
         
-        $.each(_graph.datum.json.data,function(i,line) {
+        if (data && data[0] && data[0].data) {
+          $.each(data[0].data,function(i,line) {
 
-          var average = line[1];
-          if (average <= 1) average *= 100; // if it's too low, auto-recognize that it's a percentage? This is not great. 
+            var average = line[1];
+            if (average <= 1) average *= 100; // if it's too low, auto-recognize that it's a percentage? This is not great.
 
-          _graph.datum.json.data.lines.push({
-            wavelength: line[0],
-            average: average 
+            _graph.datum.json.data.lines.push({
+              wavelength: line[0],
+              average: average
+            });
+
           });
-
           // and then reload that into its native data store, too, 
           // in spectrum.average = {y: 0, x: 0}
           _graph.datum.load(_graph.datum.json.data.lines);
-
-        });
+        }
 
       }
 
       // then display it in d3:
-      _graph.load(_graph.datum, _graph.chart);
+      if (_graph.loaded) _graph.reload_and_refresh();
+      else _graph.load(_graph.datum, _graph.chart);
 
     }
 
@@ -5448,8 +5461,9 @@ SpectralWorkbench.Graph = Class.extend({
       _graph.tagForm = new SpectralWorkbench.UI.TagForm(_graph); 
 
       /* Enter data into the graph */
+      var chartData = (typeof datum.d3 === 'function') ? datum.d3() : datum.d3;
       _graph.data = d3.select(_graph.selector + ' svg')  //Select the <svg> element you want to render the chart in.   
-                      .datum(datum.d3)   //Populate the <svg> element with chart data
+                      .datum(chartData)   //Populate the <svg> element with chart data
                       .call(_graph.chart)         //Finally, render the chart!
 
       // create DOM <id> attributes for our lines:
@@ -5461,31 +5475,39 @@ SpectralWorkbench.Graph = Class.extend({
       // http://stackoverflow.com/questions/70579/what-are-valid-values-for-the-id-attribute-in-html
 
       // main graph lines
-      d3.selectAll('g.nv-focus g.nv-line > g > g.nv-groups g')
+      d3.selectAll(_graph.selector + ' svg g.nv-focus g.nv-line > g > g.nv-groups g')
         //.addClass('main-line') // we should do this (or the d3 equiv.) for later selections. Or if nvd3 offers a ready-made selection
-        .attr("id", function(datum, index) {
-          var id = d3.select('svg').data()[0][index].id; // this is the real d3 DOM-stored data
+        .attr("id", function(d, index) {
+          if (!chartData) return 'spectrum-line-none';
+          var series = chartData[index];
+          var id = (series && series.id) ? series.id : (_graph.datum.id || 'none');
           return 'spectrum-line-' + id;
         });
 
       // zoom graph lines
-      d3.selectAll('g.nv-context g.nv-line > g > g.nv-groups g')
-        .attr("id", function(datum, index) {
-          var id = d3.select('svg').data()[0][index].id; // this is the real d3 DOM-stored data
+      d3.selectAll(_graph.selector + ' svg g.nv-context g.nv-line > g > g.nv-groups g')
+        .attr("id", function(d, index) {
+          if (!chartData) return 'spectrum-line-none';
+          var series = chartData[index];
+          var id = (series && series.id) ? series.id : (_graph.datum.id || 'none');
           return 'spectrum-line-' + id;
         });
 
       // graph line hover circles for main graph lines
-      d3.selectAll('g.nv-focus g.nv-scatterWrap g.nv-groups g')
-        .attr("id", function(datum, index) {
-          var id = d3.select('svg').data()[0][index].id; // this is the real d3 DOM-stored data
+      d3.selectAll(_graph.selector + ' svg g.nv-focus g.nv-scatterWrap g.nv-groups g')
+        .attr("id", function(d, index) {
+          if (!chartData) return 'spectrum-hover-none';
+          var series = chartData[index];
+          var id = (series && series.id) ? series.id : (_graph.datum.id || 'none');
           return 'spectrum-hover-' + id;
         });
 
       // graph line hover circles for zoom graph lines
-      d3.selectAll('g.nv-context g.nv-scatterWrap g.nv-groups g')
-        .attr("id", function(datum, index) {
-          var id = d3.select('svg').data()[0][index].id; // this is the real d3 DOM-stored data
+      d3.selectAll(_graph.selector + ' svg g.nv-context g.nv-scatterWrap g.nv-groups g')
+        .attr("id", function(d, index) {
+          if (!chartData) return 'spectrum-hover-none';
+          var series = chartData[index];
+          var id = (series && series.id) ? series.id : (_graph.datum.id || 'none');
           return 'spectrum-hover-' + id;
          });
 
@@ -5752,41 +5774,44 @@ SpectralWorkbench.Graph = Class.extend({
       _graph.width  = newWidth || getUrlParameter('width')  || $(_graph.selector).width() || _graph.width;
  
       if (getUrlParameter('height')) {
- 
+
         _graph.height = getUrlParameter('height');
- 
+
+      } else if ($(_graph.selector).height() > 0) {
+
+        _graph.height = $(_graph.selector).height();
+
       } else {
- 
-        if (($(_graph.selector).height() < 450 && _graph.dataType == 'set') || 
-            ($(_graph.selector).height() < 350 && _graph.dataType == 'spectrum')) { 
+
+        if (($(_graph.selector).width() < 450 && _graph.dataType == 'set') ||
+            ($(_graph.selector).width() < 350 && _graph.dataType == 'spectrum')) {
 
           // compact
           _graph.height = 180;
           $('#embed').addClass('compact'); // hides image
- 
+
         } else {
- 
+
           // full size
           _graph.height = 200;
           $('#embed').removeClass('compact');
- 
+
         }
- 
-        _graph.height = _graph.height - _graph.margin.top  - _graph.margin.bottom;
- 
+
       }
+
+      _graph.height = _graph.height - _graph.margin.top  - _graph.margin.bottom;
 
       // make space for the zoom brushing pane
       if (_graph.zooming) _graph.height += 100;
 
-      $(_graph.selector).height(_graph.height)
+      $(_graph.selector).height(_graph.height + _graph.margin.top + _graph.margin.bottom)
+      if (_graph.svg) _graph.svg.attr("height", _graph.height + _graph.margin.top + _graph.margin.bottom);
 
       _graph.width  = _graph.width  
                     - _graph.margin.left 
                     //- _graph.margin.right // right margin not required on image, for some reason
                     - (_graph.embedmargin * 2); // this is 10 * 2
-
-      _graph.el.height(120); // this isn't done later because we mess w/ height, in, for example, calibration
 
       if (_graph.datum && _graph.datum.image) _graph.datum.image.updateSize(); // adjust image element and image.container element
 
