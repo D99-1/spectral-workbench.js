@@ -56,7 +56,8 @@
       margin: 20px 0;
     }
     .upload-preview-area {
-      background: #111;
+      background: #f0f0f0;
+      border: 1px dashed #ccc;
       border-radius: 6px;
       padding: 10px;
       margin-top: 10px;
@@ -106,12 +107,9 @@
       margin-top: 8px;
       text-align: center;
     }
-    /* Make nvd3 legend visible on dark background */
-    .nvd3 .nv-legend .nv-series {
-      fill: #eee !important;
-    }
-    .nvd3 .nv-legend text {
-      fill: #eee !important;
+    /* Ensure nvd3 text is visible on light background */
+    .nvd3 .nv-axis text, .nvd3 .nv-legend text {
+      fill: #333 !important;
     }
     .calib-marker {
       stroke: red;
@@ -337,12 +335,12 @@
       </div>
 
       <!-- Calibration -->
-      <div id="calibration" class="content center-content" role="tabpanel" style="background: #272727; color: #b7b7b7;">
+      <div id="calibration" class="content center-content" role="tabpanel">
         <div class="full-strecth-flex-vertical center-content" style="padding: 20px; width: 100%; max-width: 1200px;">
           <h3><i class="fa fa-crosshairs"></i> Step 5: Wavelength Calibration</h3>
           <p>Upload an image of a known light source (e.g., CFL bulb) to calibrate your spectrometer.</p>
 
-          <div class="upload-card" style="width: 100%; background: #353535; border-radius: 8px;">
+          <div class="upload-card" style="width: 100%; border: 1px solid #ddd; border-radius: 8px;">
             <input type="file" id="calibImageUpload" accept="image/jpeg,image/png" style="display:none;">
             <button class="btn btn-spectrum" id="triggerCalibUploadBtn"><i class="fa fa-folder-open"></i> Choose Calibration Image</button>
             <span id="calibFileName" style="margin-left:10px;"></span>
@@ -359,21 +357,21 @@
           <div id="calibGraphSection" style="display:none; width: 100%; margin-top: 20px;">
             <h4>Calibration Spectrum</h4>
             <div style="position: relative;">
-              <div id="calibGraph" style="height: 300px; width: 100%; background: #333;"></div>
+              <div id="calibGraph" style="height: 300px; width: 100%;"></div>
             </div>
             <p class="text-muted">Zoom in and click on two known peaks to calibrate. (Click again to reset)</p>
 
             <div class="row" style="margin-top: 15px;">
               <div class="col-md-6">
                 <div class="input-group">
-                  <span class="input-group-addon" style="background: #444; color: #fff; border: none;">Point 1 (Pixel: <span id="p1-pixel">-</span>)</span>
-                  <input type="number" id="p1-nm" class="form-control" placeholder="Wavelength 1 (nm)" style="background: #555; color: #fff; border: none;">
+                  <span class="input-group-addon">Point 1 (Pixel: <span id="p1-pixel">-</span>)</span>
+                  <input type="number" id="p1-nm" class="form-control" placeholder="Wavelength 1 (nm)">
                 </div>
               </div>
               <div class="col-md-6">
                 <div class="input-group">
-                  <span class="input-group-addon" style="background: #444; color: #fff; border: none;">Point 2 (Pixel: <span id="p2-pixel">-</span>)</span>
-                  <input type="number" id="p2-nm" class="form-control" placeholder="Wavelength 2 (nm)" style="background: #555; color: #fff; border: none;">
+                  <span class="input-group-addon">Point 2 (Pixel: <span id="p2-pixel">-</span>)</span>
+                  <input type="number" id="p2-nm" class="form-control" placeholder="Wavelength 2 (nm)">
                 </div>
               </div>
             </div>
@@ -626,15 +624,17 @@
     });
 
     // ----- Calibration Module -----
-    let calibImage = null;
-    let calibSelectedRow = null;
+    window.calibVars = {
+      calibImage: null,
+      calibSelectedRow: null,
+      p1: { x: null, nm: null },
+      p2: { x: null, nm: null }
+    };
     let calibPreviewCanvas = document.getElementById('calibPreviewCanvas');
     let calibCtx = calibPreviewCanvas.getContext('2d');
     let calibUploadContainer = document.getElementById('calibPreviewContainer');
     let calibRowGuide = document.getElementById('calibRowGuide');
     let calibFileNameSpan = document.getElementById('calibFileName');
-    let p1 = { x: null, nm: null };
-    let p2 = { x: null, nm: null };
 
     $('#triggerCalibUploadBtn').click(() => $('#calibImageUpload').click());
 
@@ -646,14 +646,14 @@
       reader.onload = (ev) => {
         let img = new Image();
         img.onload = () => {
-          calibImage = img;
+          window.calibVars.calibImage = img;
           let displayWidth = Math.min(640, img.width);
           let displayHeight = (displayWidth / img.width) * img.height;
           calibPreviewCanvas.width = displayWidth;
           calibPreviewCanvas.height = displayHeight;
           calibCtx.drawImage(img, 0, 0, displayWidth, displayHeight);
           calibUploadContainer.style.display = 'block';
-          calibSelectedRow = null;
+          window.calibVars.calibSelectedRow = null;
           calibRowGuide.style.display = 'none';
           $('#calibGraphSection').hide();
 
@@ -661,8 +661,8 @@
             let rect = calibPreviewCanvas.getBoundingClientRect();
             let scaleY = calibPreviewCanvas.height / rect.height;
             let mouseY = (event.clientY - rect.top) * scaleY;
-            calibSelectedRow = Math.min(Math.max(Math.floor(mouseY), 0), calibPreviewCanvas.height - 1);
-            let yPercent = (calibSelectedRow / calibPreviewCanvas.height) * 100;
+            window.calibVars.calibSelectedRow = Math.min(Math.max(Math.floor(mouseY), 0), calibPreviewCanvas.height - 1);
+            let yPercent = (window.calibVars.calibSelectedRow / calibPreviewCanvas.height) * 100;
             calibRowGuide.style.display = 'block';
             calibRowGuide.style.top = `calc(${yPercent}% + ${calibPreviewCanvas.offsetTop}px)`;
             calibRowGuide.style.width = `${calibPreviewCanvas.clientWidth}px`;
@@ -676,19 +676,19 @@
     });
 
     function extractCalibrationSpectrum() {
-      if (!calibImage || calibSelectedRow === null) return;
+      if (!window.calibVars.calibImage || window.calibVars.calibSelectedRow === null) return;
 
       let offCanvas = document.createElement('canvas');
-      offCanvas.width = calibImage.width;
-      offCanvas.height = calibImage.height;
+      offCanvas.width = window.calibVars.calibImage.width;
+      offCanvas.height = window.calibVars.calibImage.height;
       let offCtx = offCanvas.getContext('2d');
-      offCtx.drawImage(calibImage, 0, 0);
-      let scaleY = calibImage.height / calibPreviewCanvas.height;
-      let originalRow = Math.floor(calibSelectedRow * scaleY);
-      originalRow = Math.min(originalRow, calibImage.height - 1);
+      offCtx.drawImage(window.calibVars.calibImage, 0, 0);
+      let scaleY = window.calibVars.calibImage.height / calibPreviewCanvas.height;
+      let originalRow = Math.floor(window.calibVars.calibSelectedRow * scaleY);
+      originalRow = Math.min(originalRow, window.calibVars.calibImage.height - 1);
 
       let pixels = [];
-      for (let x = 0; x < calibImage.width; x++) {
+      for (let x = 0; x < window.calibVars.calibImage.width; x++) {
         let pixel = offCtx.getImageData(x, originalRow, 1, 1).data;
         pixels.push({ r: pixel[0], g: pixel[1], b: pixel[2] });
       }
@@ -706,20 +706,25 @@
         // Add click listener to graph for point selection
         $('#calibGraph').off('click').on('click', function(event) {
           let rect = this.getBoundingClientRect();
+          // Use event.offsetX or manual calculation
           let x = event.clientX - rect.left - calibGraph.margin.left;
+          console.log("Click detected at x =", x, "rect =", rect);
           if (x < 0 || x > calibGraph.width) return;
 
-          let pixelX = calibGraph.displayPxToNm(x);
+          // Invert the x-scale to get the data-space coordinate
+          let dataX = calibGraph.chart.xAxis.scale().invert(x);
 
-          if (p1.x === null || (p1.x !== null && p2.x !== null)) {
-            p1.x = pixelX;
-            $('#p1-pixel').text(Math.round(p1.x));
-            p2.x = null;
+          if (window.calibVars.p1.x === null || (window.calibVars.p1.x !== null && window.calibVars.p2.x !== null)) {
+            window.calibVars.p1.x = dataX;
+            $('#p1-pixel').text(Math.round(window.calibVars.p1.x));
+            window.calibVars.p2.x = null;
             $('#p2-pixel').text('-');
             $('#btn-apply-calibration').prop('disabled', true);
+            console.log("P1 selected:", window.calibVars.p1.x);
           } else {
-            p2.x = pixelX;
-            $('#p2-pixel').text(Math.round(p2.x));
+            window.calibVars.p2.x = dataX;
+            $('#p2-pixel').text(Math.round(window.calibVars.p2.x));
+            console.log("P2 selected:", window.calibVars.p2.x);
             checkCalibReady();
           }
           renderCalibMarkers();
@@ -758,8 +763,8 @@
               .text(label);
           }
 
-          drawMarker(p1.x, 'P1');
-          drawMarker(p2.x, 'P2');
+          drawMarker(window.calibVars.p1.x, 'P1');
+          drawMarker(window.calibVars.p2.x, 'P2');
         }
       }, 800);
     }
@@ -767,10 +772,12 @@
     $('#p1-nm, #p2-nm').on('input', checkCalibReady);
 
     function checkCalibReady() {
-      p1.nm = parseFloat($('#p1-nm').val());
-      p2.nm = parseFloat($('#p2-nm').val());
+      window.calibVars.p1.nm = parseFloat($('#p1-nm').val());
+      window.calibVars.p2.nm = parseFloat($('#p2-nm').val());
 
-      if (p1.x !== null && p2.x !== null && !isNaN(p1.nm) && !isNaN(p2.nm)) {
+      console.log("Checking readiness:", { p1x: window.calibVars.p1.x, p2x: window.calibVars.p2.x, p1nm: window.calibVars.p1.nm, p2nm: window.calibVars.p2.nm });
+
+      if (window.calibVars.p1.x !== null && window.calibVars.p2.x !== null && !isNaN(window.calibVars.p1.nm) && !isNaN(window.calibVars.p2.nm)) {
         $('#btn-apply-calibration').prop('disabled', false);
       } else {
         $('#btn-apply-calibration').prop('disabled', true);
@@ -778,12 +785,12 @@
     }
 
     $('#btn-apply-calibration').click(() => {
-      if (window.targetPixels && p1.x !== null && p2.x !== null && p1.nm && p2.nm) {
+      if (window.targetPixels && window.calibVars.p1.x !== null && window.calibVars.p2.x !== null && !isNaN(window.calibVars.p1.nm) && !isNaN(window.calibVars.p2.nm)) {
         // Use normalized coordinates (0.0 to 1.0) to avoid resolution mismatch
         // p1.x and p2.x are pixel indices in the calibration image
         let calibWidth = calibGraph.datum.average.length;
-        let n1 = p1.x / (calibWidth - 1);
-        let n2 = p2.x / (calibWidth - 1);
+        let n1 = window.calibVars.p1.x / (calibWidth - 1);
+        let n2 = window.calibVars.p2.x / (calibWidth - 1);
 
         // Linear calibration: nm = m * normalized_x + c
         // nm1 = m * n1 + c
@@ -792,8 +799,8 @@
         // m = (nm2 - nm1) / (n2 - n1)
         // c = nm1 - m * n1
 
-        let m = (p2.nm - p1.nm) / (n2 - n1);
-        let c = p1.nm - m * n1;
+        let m = (window.calibVars.p2.nm - window.calibVars.p1.nm) / (n2 - n1);
+        let c = window.calibVars.p1.nm - m * n1;
 
         applyCalibrationToTarget(m, c);
         stepper.to(6);
