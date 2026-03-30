@@ -113,6 +113,15 @@
     .nvd3 .nv-legend text {
       fill: #eee !important;
     }
+    .calib-marker {
+      stroke: red;
+      stroke-width: 2px;
+    }
+    .calib-marker-label {
+      fill: red;
+      font-size: 10px;
+      font-weight: bold;
+    }
   </style>
 
   <!--[if lt IE 9]>
@@ -144,6 +153,18 @@
       <div class="step" data-target="#plotting">
         <button type="button" class="step-trigger" role="tab" aria-controls="plotting" id="plot-trigger">
           <span class="bs-stepper-label">Plotting</span>
+        </button>
+      </div>
+      <div class="line"></div>
+      <div class="step" data-target="#calibration">
+        <button type="button" class="step-trigger" role="tab" aria-controls="calibration" id="calibration-trigger">
+          <span class="bs-stepper-label">Calibration</span>
+        </button>
+      </div>
+      <div class="line"></div>
+      <div class="step" data-target="#final-results">
+        <button type="button" class="step-trigger" role="tab" aria-controls="final-results" id="final-results-trigger">
+          <span class="bs-stepper-label">Final Results</span>
         </button>
       </div>
     </div>
@@ -297,6 +318,7 @@
         </div>
         <div class="toolbar" style="margin-top: 10px; margin-bottom: 10px;">
           <button class="btn btn-default" id="btn-export-csv"><i class="fa fa-download"></i> Export CSV</button>
+          <button class="btn btn-primary" id="btn-to-calibration"><i class="fa fa-arrow-right"></i> Proceed to Calibration</button>
         </div>
         <div id="plotting-note">
           Use the bottom graph as the navigator to zoom into any section of the plot by dragging
@@ -312,6 +334,70 @@
             });
           })
         </script>
+      </div>
+
+      <!-- Calibration -->
+      <div id="calibration" class="content center-content" role="tabpanel" style="background: #272727; color: #b7b7b7;">
+        <div class="full-strecth-flex-vertical center-content" style="padding: 20px; width: 100%; max-width: 1200px;">
+          <h3><i class="fa fa-crosshairs"></i> Step 5: Wavelength Calibration</h3>
+          <p>Upload an image of a known light source (e.g., CFL bulb) to calibrate your spectrometer.</p>
+
+          <div class="upload-card" style="width: 100%; background: #353535; border-radius: 8px;">
+            <input type="file" id="calibImageUpload" accept="image/jpeg,image/png" style="display:none;">
+            <button class="btn btn-spectrum" id="triggerCalibUploadBtn"><i class="fa fa-folder-open"></i> Choose Calibration Image</button>
+            <span id="calibFileName" style="margin-left:10px;"></span>
+
+            <div id="calibPreviewContainer" class="upload-preview-area" style="display:none; position: relative;">
+              <div style="position:relative; display:inline-block;">
+                <canvas id="calibPreviewCanvas" class="upload-preview-canvas" width="640" height="200"></canvas>
+                <div id="calibRowGuide" class="row-highlight" style="display:none;"></div>
+              </div>
+              <p class="text-muted" style="margin-top:5px;">Click on the image to set the sampling row for calibration.</p>
+            </div>
+          </div>
+
+          <div id="calibGraphSection" style="display:none; width: 100%; margin-top: 20px;">
+            <h4>Calibration Spectrum</h4>
+            <div style="position: relative;">
+              <div id="calibGraph" style="height: 300px; width: 100%; background: #333;"></div>
+            </div>
+            <p class="text-muted">Zoom in and click on two known peaks to calibrate. (Click again to reset)</p>
+
+            <div class="row" style="margin-top: 15px;">
+              <div class="col-md-6">
+                <div class="input-group">
+                  <span class="input-group-addon" style="background: #444; color: #fff; border: none;">Point 1 (Pixel: <span id="p1-pixel">-</span>)</span>
+                  <input type="number" id="p1-nm" class="form-control" placeholder="Wavelength 1 (nm)" style="background: #555; color: #fff; border: none;">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="input-group">
+                  <span class="input-group-addon" style="background: #444; color: #fff; border: none;">Point 2 (Pixel: <span id="p2-pixel">-</span>)</span>
+                  <input type="number" id="p2-nm" class="form-control" placeholder="Wavelength 2 (nm)" style="background: #555; color: #fff; border: none;">
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top: 20px; text-align: center;">
+              <button class="btn btn-success btn-lg" id="btn-apply-calibration" disabled><i class="fa fa-check"></i> Apply Calibration</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Final Results -->
+      <div id="final-results" class="content center-content" role="tabpanel">
+        <div class="swb-graphing center-content" style="width: 100%; max-width: 1200px;">
+          <h3><i class="fa fa-chart-line"></i> Final Calibrated Spectrum</h3>
+          <div id="graph-final" style="height: 400px; width: 100%;"></div>
+        </div>
+        <div class="toolbar" style="margin-top: 10px; margin-bottom: 10px;">
+          <button class="btn btn-default" id="btn-export-final-csv"><i class="fa fa-download"></i> Export Calibrated CSV</button>
+          <button class="btn btn-primary" id="restart-final"><i class="fa fa-refresh"></i> Start Over</button>
+        </div>
+        <div id="final-note" style="background: #dedede; padding: 15px; border-radius: 5px; margin-top: 10px; color: #333;">
+          This graph shows your captured spectrum calibrated using the provided reference.
+        </div>
       </div>
     </div>
   </div>
@@ -382,9 +468,18 @@
     $("#setting-page-next").on('click', function () { stepper.to(3); });
     $("#capture-trigger").on('click', function () { stepper.to(3); });
 
+    $("#btn-to-calibration").on('click', function() { stepper.to(5); });
+    $("#calibration-trigger").on('click', function() { stepper.to(5); });
+    $("#final-results-trigger").on('click', function() { stepper.to(6); });
+    $("#restart-final").on('click', function() { location.reload(); });
+
     window.finalGraph = null;
+    window.calibGraph = null;
+    window.calibratedGraph = null;
+    window.targetPixels = null;
 
     window.initializeFinalPlot = function(pixels) {
+      window.targetPixels = pixels;
       var spectrum = createRGBSpectrum(pixels);
       // Clear previous graph content
       var graphContainer = $('#graph1');
@@ -529,6 +624,213 @@
       $("#capture-trigger, #setting-trigger, #landing-page-trigger").prop('disabled', true);
       initializeFinalPlot(pixels);
     });
+
+    // ----- Calibration Module -----
+    let calibImage = null;
+    let calibSelectedRow = null;
+    let calibPreviewCanvas = document.getElementById('calibPreviewCanvas');
+    let calibCtx = calibPreviewCanvas.getContext('2d');
+    let calibUploadContainer = document.getElementById('calibPreviewContainer');
+    let calibRowGuide = document.getElementById('calibRowGuide');
+    let calibFileNameSpan = document.getElementById('calibFileName');
+    let p1 = { x: null, nm: null };
+    let p2 = { x: null, nm: null };
+
+    $('#triggerCalibUploadBtn').click(() => $('#calibImageUpload').click());
+
+    $('#calibImageUpload').change((e) => {
+      let file = e.target.files[0];
+      if (!file) return;
+      calibFileNameSpan.innerText = file.name;
+      let reader = new FileReader();
+      reader.onload = (ev) => {
+        let img = new Image();
+        img.onload = () => {
+          calibImage = img;
+          let displayWidth = Math.min(640, img.width);
+          let displayHeight = (displayWidth / img.width) * img.height;
+          calibPreviewCanvas.width = displayWidth;
+          calibPreviewCanvas.height = displayHeight;
+          calibCtx.drawImage(img, 0, 0, displayWidth, displayHeight);
+          calibUploadContainer.style.display = 'block';
+          calibSelectedRow = null;
+          calibRowGuide.style.display = 'none';
+          $('#calibGraphSection').hide();
+
+          $(calibPreviewCanvas).off('click').on('click', function(event) {
+            let rect = calibPreviewCanvas.getBoundingClientRect();
+            let scaleY = calibPreviewCanvas.height / rect.height;
+            let mouseY = (event.clientY - rect.top) * scaleY;
+            calibSelectedRow = Math.min(Math.max(Math.floor(mouseY), 0), calibPreviewCanvas.height - 1);
+            let yPercent = (calibSelectedRow / calibPreviewCanvas.height) * 100;
+            calibRowGuide.style.display = 'block';
+            calibRowGuide.style.top = `calc(${yPercent}% + ${calibPreviewCanvas.offsetTop}px)`;
+            calibRowGuide.style.width = `${calibPreviewCanvas.clientWidth}px`;
+
+            extractCalibrationSpectrum();
+          });
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    function extractCalibrationSpectrum() {
+      if (!calibImage || calibSelectedRow === null) return;
+
+      let offCanvas = document.createElement('canvas');
+      offCanvas.width = calibImage.width;
+      offCanvas.height = calibImage.height;
+      let offCtx = offCanvas.getContext('2d');
+      offCtx.drawImage(calibImage, 0, 0);
+      let scaleY = calibImage.height / calibPreviewCanvas.height;
+      let originalRow = Math.floor(calibSelectedRow * scaleY);
+      originalRow = Math.min(originalRow, calibImage.height - 1);
+
+      let pixels = [];
+      for (let x = 0; x < calibImage.width; x++) {
+        let pixel = offCtx.getImageData(x, originalRow, 1, 1).data;
+        pixels.push({ r: pixel[0], g: pixel[1], b: pixel[2] });
+      }
+
+      let spectrum = createRGBSpectrum(pixels);
+      $('#calibGraphSection').show();
+      $('#calibGraph').empty();
+
+      calibGraph = new SpectralWorkbench.Graph({ selector: '#calibGraph' });
+      calibGraph.load(spectrum);
+
+      setTimeout(() => {
+        if (calibGraph) calibGraph.updateSize()();
+
+        // Add click listener to graph for point selection
+        $('#calibGraph').off('click').on('click', function(event) {
+          let rect = this.getBoundingClientRect();
+          let x = event.clientX - rect.left - calibGraph.margin.left;
+          if (x < 0 || x > calibGraph.width) return;
+
+          let pixelX = calibGraph.displayPxToNm(x);
+
+          if (p1.x === null || (p1.x !== null && p2.x !== null)) {
+            p1.x = pixelX;
+            $('#p1-pixel').text(Math.round(p1.x));
+            p2.x = null;
+            $('#p2-pixel').text('-');
+            $('#btn-apply-calibration').prop('disabled', true);
+          } else {
+            p2.x = pixelX;
+            $('#p2-pixel').text(Math.round(p2.x));
+            checkCalibReady();
+          }
+          renderCalibMarkers();
+        });
+
+        // Hook into graph refresh to update markers
+        let originalRefresh = calibGraph.refresh;
+        calibGraph.refresh = function() {
+          originalRefresh.call(calibGraph);
+          renderCalibMarkers();
+        };
+
+        function renderCalibMarkers() {
+          let svg = d3.select('#calibGraph svg .nv-focus');
+          svg.selectAll('.calib-marker-group').remove();
+          let markerGroup = svg.append('g').attr('class', 'calib-marker-group');
+
+          function drawMarker(pixelX, label) {
+            if (pixelX === null) return;
+            // nvd3 focus chart uses chart.xAxis.scale()
+            let xPos = calibGraph.chart.xAxis.scale()(pixelX);
+            if (xPos < 0 || xPos > calibGraph.width) return;
+
+            markerGroup.append('line')
+              .attr('class', 'calib-marker')
+              .attr('x1', xPos)
+              .attr('x2', xPos)
+              .attr('y1', 0)
+              .attr('y2', calibGraph.height);
+
+            markerGroup.append('text')
+              .attr('class', 'calib-marker-label')
+              .attr('x', xPos)
+              .attr('y', -5)
+              .attr('text-anchor', 'middle')
+              .text(label);
+          }
+
+          drawMarker(p1.x, 'P1');
+          drawMarker(p2.x, 'P2');
+        }
+      }, 800);
+    }
+
+    $('#p1-nm, #p2-nm').on('input', checkCalibReady);
+
+    function checkCalibReady() {
+      p1.nm = parseFloat($('#p1-nm').val());
+      p2.nm = parseFloat($('#p2-nm').val());
+
+      if (p1.x !== null && p2.x !== null && !isNaN(p1.nm) && !isNaN(p2.nm)) {
+        $('#btn-apply-calibration').prop('disabled', false);
+      } else {
+        $('#btn-apply-calibration').prop('disabled', true);
+      }
+    }
+
+    $('#btn-apply-calibration').click(() => {
+      if (window.targetPixels && p1.x !== null && p2.x !== null && p1.nm && p2.nm) {
+        // Use normalized coordinates (0.0 to 1.0) to avoid resolution mismatch
+        // p1.x and p2.x are pixel indices in the calibration image
+        let calibWidth = calibGraph.datum.average.length;
+        let n1 = p1.x / (calibWidth - 1);
+        let n2 = p2.x / (calibWidth - 1);
+
+        // Linear calibration: nm = m * normalized_x + c
+        // nm1 = m * n1 + c
+        // nm2 = m * n2 + c
+        // nm2 - nm1 = m * (n2 - n1)
+        // m = (nm2 - nm1) / (n2 - n1)
+        // c = nm1 - m * n1
+
+        let m = (p2.nm - p1.nm) / (n2 - n1);
+        let c = p1.nm - m * n1;
+
+        applyCalibrationToTarget(m, c);
+        stepper.to(6);
+      }
+    });
+
+    function applyCalibrationToTarget(m, c) {
+      let targetWidth = window.targetPixels.length;
+      let lines = window.targetPixels.map((pixel, idx) => {
+        let normalizedX = idx / (targetWidth - 1);
+        return {
+          wavelength: +(m * normalizedX + c).toFixed(2),
+          r: pixel.r,
+          g: pixel.g,
+          b: pixel.b,
+          average: (pixel.r + pixel.g + pixel.b) / 3
+        };
+      });
+
+      let spectrum = new SpectralWorkbench.Spectrum({ data: { lines: lines } });
+      $('#graph-final').empty();
+      calibratedGraph = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
+      calibratedGraph.load(spectrum);
+
+      setTimeout(() => {
+        if (calibratedGraph) {
+          calibratedGraph.updateSize()();
+          // Ensure x-axis shows nanometers and has proper formatting
+          calibratedGraph.chart.xAxis.axisLabel('Wavelength (nanometers)')
+            .tickFormat(d3.format('.1f'));
+          calibratedGraph.refresh();
+        }
+      }, 500);
+
+      // Export calibrated CSV
+      calibratedGraph.datum.downloadCSV('#btn-export-final-csv');
+    }
   });
 </script>
 </html>
