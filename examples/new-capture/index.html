@@ -122,6 +122,9 @@
       font-size: 10px;
       font-weight: bold;
     }
+    #calibGraph svg {
+      cursor: crosshair !important;
+    }
   </style>
 
   <!--[if lt IE 9]>
@@ -403,6 +406,16 @@
   </div>
 
   <script>
+    // Global debug for verification
+    window.getCalibPoints = function() {
+      return {
+        p1x: window.calibVars.p1.x,
+        p2x: window.calibVars.p2.x,
+        p1nm: window.calibVars.p1.nm,
+        p2nm: window.calibVars.p2.nm
+      };
+    };
+
     // Initialize webcam only when needed
     window.webcamStarted = false;
     window.startWebcam = function() {
@@ -706,11 +719,12 @@
         if (calibGraph) calibGraph.updateSize()();
 
         // Add click listener to graph for point selection
-        $('#calibGraph').off('click').on('click', function(event) {
-          let rect = this.getBoundingClientRect();
-          // Use event.offsetX or manual calculation
-          let x = event.clientX - rect.left - calibGraph.margin.left;
-          console.log("Click detected at x =", x, "rect =", rect);
+        d3.select('#calibGraph svg').on('click', function() {
+          let focusG = d3.select('#calibGraph .nv-focus');
+          if (focusG.empty()) return;
+          let mouse = d3.mouse(focusG.node());
+          let x = mouse[0];
+
           if (x < 0 || x > calibGraph.width) return;
 
           // Invert the x-scale to get the data-space coordinate
