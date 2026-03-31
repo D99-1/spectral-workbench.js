@@ -87,18 +87,29 @@ SpectralWorkbench.Image = Class.extend({
 
     /* ======================================
      * Returns a nested array of pixels, each in the format of getPoint(), 
-     * values from 0-255
+     * values from 0-255. Supports arbitrary lines if x1, y1, x2, y2 are provided.
      */
-    image.getLine = function(y) {
+    image.getLine = function(x1, y1, x2, y2) {
 
-      var output = [],
-          input  = image.ctx.getImageData(0, y, image.width, 1).data;
+      if (arguments.length === 1) {
+        y1 = y2 = x1;
+        x1 = 0;
+        x2 = image.width;
+      }
 
-      for (var i = 0; i < input.length; i += 4) {
-        output.push([ input[i],
-                      input[i+1],
-                      input[i+2],
-                      input[i+3] ]);
+      var output = [];
+      var dx = x2 - x1;
+      var dy = y2 - y1;
+      var distance = Math.sqrt(dx*dx + dy*dy);
+      var steps = Math.round(distance);
+
+      for (var i = 0; i < steps; i++) {
+        var x = Math.round(x1 + (dx * i / steps));
+        var y = Math.round(y1 + (dy * i / steps));
+        // Ensure within bounds
+        x = Math.max(0, Math.min(image.width - 1, x));
+        y = Math.max(0, Math.min(image.height - 1, y));
+        output.push(image.getPoint(x, y));
       }
 
       return output;
@@ -107,25 +118,45 @@ SpectralWorkbench.Image = Class.extend({
 
 
     /* ======================================
-     * Display a horizontal line on the image, y pixels below the top edge
-     * (used for showing the image cross section)
+     * Display a line on the image using an SVG overlay.
      */
-    image.setupLine = function(y) {
+    image.setupLine = function() {
 
-      if (_graph) {
+      if (_graph && !image.svg) {
 
-        image.el.before($('<div class="section-line-container"><div class="section-line"></div></div>'));
+        image.el.before($('<div class="section-line-container"></div>'));
         image.lineContainerEl = image.container.find('.section-line-container');
-        image.lineContainerEl.css('position', 'relative');
-        image.lineEl = image.container.find('.section-line');
-        image.lineEl.css('position', 'absolute')
-                    .css('width', '100%')
-                    .css('top', 0)
-                    .css('border-bottom', '1px solid rgba(255,255,255,0.5)')
-                    .css('font-size', '9px')
-                    .css('color', 'rgba(255,255,255,0.5)')
-                    .css('text-align', 'right')
-                    .css('padding-right', '6px')
+        image.lineContainerEl.css('position', 'relative')
+                             .css('width', '100%')
+                             .css('height', 0);
+
+        image.svg = d3.select(image.lineContainerEl[0])
+          .append('svg:svg')
+          .style('position', 'absolute')
+          .style('top', 0)
+          .style('left', 0)
+          .style('width', '100%')
+          .style('height', '100px')
+          .style('pointer-events', 'none')
+          .attr('class', 'sampling-line-overlay');
+
+        image.lineEl = image.svg.append('svg:line')
+          .attr('stroke', 'rgba(255,255,255,0.5)')
+          .attr('stroke-width', 1);
+
+        image.handle1 = image.svg.append('svg:circle')
+          .attr('r', 5)
+          .attr('fill', 'rgba(255,255,255,0.8)')
+          .attr('cursor', 'move')
+          .style('pointer-events', 'all')
+          .style('display', 'none');
+
+        image.handle2 = image.svg.append('svg:circle')
+          .attr('r', 5)
+          .attr('fill', 'rgba(255,255,255,0.8)')
+          .attr('cursor', 'move')
+          .style('pointer-events', 'all')
+          .style('display', 'none');
 
       }
 
@@ -133,31 +164,45 @@ SpectralWorkbench.Image = Class.extend({
 
 
     /* ======================================
-     * Display a horizontal line on the image, y pixels below the top edge
-     * in displace pixels. To use in image pixels, divide by image pixels and multiply
-     * by display height of element in pixels -- 100 by default.
-     * (used for showing the image cross section)
+     * Display a line on the image, from (x1, y1) to (x2, y2) in image pixels.
+     * If only one argument is provided, it's treated as a horizontal row.
      */
-    image.setLine = function(y) {
+    image.setLine = function(x1, y1, x2, y2) {
 
-      if (!image.lineEl) image.setupLine();
+      if (!image.svg) image.setupLine();
 
-      y -= 1; // off by one correction
-      y = y / image.height * 100; // convert to display scale
-
-      if (y > 20) {
-
-        image.lineEl.html('GRAPHED CROSS SECTION &nbsp;');
-        image.lineEl.css('margin-top', '-22px');
-
-      } else {
-
-        image.lineEl.html('');
-        image.lineEl.css('margin-top', '0');
-
+      if (arguments.length === 1) {
+        y1 = y2 = x1;
+        x1 = 0;
+        x2 = image.width;
       }
 
-      image.lineEl.css('top', y);
+      image.coords = { x1: x1, y1: y1, x2: x2, y2: y2 };
+
+      // convert to display scale
+      var displayWidth = image.el.width();
+      var displayHeight = image.el.height();
+
+      var dx1 = (x1 / image.width) * displayWidth;
+      var dy1 = (y1 / image.height) * displayHeight;
+      var dx2 = (x2 / image.width) * displayWidth;
+      var dy2 = (y2 / image.height) * displayHeight;
+
+      image.lineEl
+        .attr('x1', dx1)
+        .attr('y1', dy1)
+        .attr('x2', dx2)
+        .attr('y2', dy2);
+
+      image.handle1
+        .attr('cx', dx1)
+        .attr('cy', dy1)
+        .style('display', 'block');
+
+      image.handle2
+        .attr('cx', dx2)
+        .attr('cy', dy2)
+        .style('display', 'block');
 
       return image.lineEl;
 
@@ -245,6 +290,17 @@ SpectralWorkbench.Image = Class.extend({
                        .height(100)
                        .css('max-width', 'none')
                        .css('margin-left', 0);
+
+      }
+
+      if (image.svg) {
+
+        image.svg.attr('width', image.el.width())
+                 .css('margin-left', image.el.css('margin-left'));
+
+        if (image.coords) {
+          image.setLine(image.coords.x1, image.coords.y1, image.coords.x2, image.coords.y2);
+        }
 
       }
 

@@ -575,17 +575,25 @@ SpectralWorkbench.Spectrum = SpectralWorkbench.Datum.extend({
 
     /* ======================================
      * Overwrite spectrum.json.data.lines, the raw JSON of the spectrum
-     * <y> is the y-position of the cross section of pixels, where 0 is the top row
+     * <y_or_x1> is the y-position or x1-position of the cross section
      * <keepCalibrated> is a boolean which indicates whether to keep or flush the calibration
      * <image> is a SpectralWorkbench.Image object, defaulting to spectrum.image
+     * <y1, x2, y2> are optional for arbitrary line sampling
      */
-    _spectrum.imgToJSON = function(y, keepCalibrated, image) {
+    _spectrum.imgToJSON = function(y_or_x1, keepCalibrated, image, y1, x2, y2) {
 
       var lines = [];
 
       image = image || _spectrum.image;
 
-      image.getLine(y).forEach(function(pixel, index) {
+      var pixelData;
+      if (arguments.length > 3) {
+        pixelData = image.getLine(y_or_x1, y1, x2, y2);
+      } else {
+        pixelData = image.getLine(y_or_x1);
+      }
+
+      pixelData.forEach(function(pixel, index) {
 
         lines.push({
           'average': +((pixel[0] + pixel[1] + pixel[2]) / 3).toPrecision(_spectrum.sigFigIntensity),
