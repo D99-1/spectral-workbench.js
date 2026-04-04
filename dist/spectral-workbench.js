@@ -223,6 +223,32 @@ SpectralWorkbench.Image = Class.extend({
 
     }
 
+    /* ======================================
+     * Returns a array of pixel brightnesses in [r,g,b,a] format,
+     * values from 0-255, using bilinear interpolation for sub-pixel accuracy.
+     */
+    image.getPointBilinear = function(x, y) {
+      var x0 = Math.floor(x);
+      var x1 = Math.min(x0 + 1, image.width - 1);
+      var y0 = Math.floor(y);
+      var y1 = Math.min(y0 + 1, image.height - 1);
+
+      var dx = x - x0;
+      var dy = y - y0;
+
+      var p00 = image.getPoint(x0, y0);
+      var p10 = image.getPoint(x1, y0);
+      var p01 = image.getPoint(x0, y1);
+      var p11 = image.getPoint(x1, y1);
+
+      var r = p00[0] * (1 - dx) * (1 - dy) + p10[0] * dx * (1 - dy) + p01[0] * (1 - dx) * dy + p11[0] * dx * dy;
+      var g = p00[1] * (1 - dx) * (1 - dy) + p10[1] * dx * (1 - dy) + p01[1] * (1 - dx) * dy + p11[1] * dx * dy;
+      var b = p00[2] * (1 - dx) * (1 - dy) + p10[2] * dx * (1 - dy) + p01[2] * (1 - dx) * dy + p11[2] * dx * dy;
+      var a = p00[3] * (1 - dx) * (1 - dy) + p10[3] * dx * (1 - dy) + p01[3] * (1 - dx) * dy + p11[3] * dx * dy;
+
+      return [r, g, b, a];
+    }
+
 
     /* ======================================
      * Returns a nested array of pixels, each in the format of getPoint(), 
@@ -241,14 +267,13 @@ SpectralWorkbench.Image = Class.extend({
       var dy = y2 - y1;
       var distance = Math.sqrt(dx*dx + dy*dy);
       var steps = Math.round(distance);
+      if (steps === 0) steps = 1;
 
       for (var i = 0; i < steps; i++) {
-        var x = Math.round(x1 + (dx * i / steps));
-        var y = Math.round(y1 + (dy * i / steps));
-        // Ensure within bounds
-        x = Math.max(0, Math.min(image.width - 1, x));
-        y = Math.max(0, Math.min(image.height - 1, y));
-        output.push(image.getPoint(x, y));
+        var t = (steps === 1) ? 0 : i / (steps - 1);
+        var x = x1 + dx * t;
+        var y = y1 + dy * t;
+        output.push(image.getPointBilinear(x, y));
       }
 
       return output;
@@ -275,24 +300,28 @@ SpectralWorkbench.Image = Class.extend({
           .style('top', 0)
           .style('left', 0)
           .style('width', '100%')
-          .style('height', '100px')
+          .style('height', '100%')
           .style('pointer-events', 'none')
           .attr('class', 'sampling-line-overlay');
 
         image.lineEl = image.svg.append('svg:line')
-          .attr('stroke', 'rgba(255,255,255,0.5)')
-          .attr('stroke-width', 1);
+          .attr('stroke', '#ffcc00')
+          .attr('stroke-width', 2);
 
         image.handle1 = image.svg.append('svg:circle')
-          .attr('r', 5)
-          .attr('fill', 'rgba(255,255,255,0.8)')
+          .attr('r', 6)
+          .attr('fill', '#ffcc00')
+          .attr('stroke', '#ffaa33')
+          .attr('stroke-width', 1)
           .attr('cursor', 'move')
           .style('pointer-events', 'all')
           .style('display', 'none');
 
         image.handle2 = image.svg.append('svg:circle')
-          .attr('r', 5)
-          .attr('fill', 'rgba(255,255,255,0.8)')
+          .attr('r', 6)
+          .attr('fill', '#ffcc00')
+          .attr('stroke', '#ffaa33')
+          .attr('stroke-width', 1)
           .attr('cursor', 'move')
           .style('pointer-events', 'all')
           .style('display', 'none');
@@ -4420,26 +4449,20 @@ SpectralWorkbench.UI.ToolPaneTypes = {
 
       form.customFormEl.html("<p>Click twice to set the sampling line:</p><input class='cross-section' type='text' value='0' />");
 
-      var firstClick = true;
-      var x1, y1, x2, y2;
+      var points = { a: null, b: null };
 
       form.graph.datum.image.click(function(x, y, e) {
+        if (points.a && points.b) return;
 
-        if (firstClick) {
-
-          x1 = x; y1 = y;
-          firstClick = false;
-
+        if (!points.a) {
+          points.a = { x: x, y: y };
+          form.graph.datum.image.setLine(x, y, x, y);
         } else {
-
-          x2 = x; y2 = y;
-          form.el.find('.cross-section').val(x1 + ',' + y1 + ',' + x2 + ',' + y2);
-          form.graph.datum.image.setLine(x1, y1, x2, y2);
+          points.b = { x: x, y: y };
+          form.el.find('.cross-section').val(Math.round(points.a.x) + ',' + Math.round(points.a.y) + ',' + Math.round(points.b.x) + ',' + Math.round(points.b.y));
+          form.graph.datum.image.setLine(points.a.x, points.a.y, points.b.x, points.b.y);
           setupDraggable();
-          firstClick = true;
-
         }
-
       });
 
       var setupDraggable = function() {
@@ -4452,8 +4475,8 @@ SpectralWorkbench.UI.ToolPaneTypes = {
           var coords = form.graph.datum.image.coords;
 
           // Convert display px to image px
-          var newX = form.graph.datum.displayPxToImagePx(d3.event.x);
-          var newY = (d3.event.y / 100) * form.graph.datum.image.height;
+          var newX = Math.max(0, Math.min(form.graph.datum.image.width, form.graph.datum.image.width * (d3.event.x / form.graph.datum.image.el.width())));
+          var newY = Math.max(0, Math.min(form.graph.datum.image.height, form.graph.datum.image.height * (d3.event.y / form.graph.datum.image.el.height())));
 
           if (isHandle1) {
             coords.x1 = newX;
@@ -4468,6 +4491,8 @@ SpectralWorkbench.UI.ToolPaneTypes = {
 
         });
 
+        form.graph.datum.image.handle1.on('.drag', null);
+        form.graph.datum.image.handle2.on('.drag', null);
         form.graph.datum.image.handle1.call(drag);
         form.graph.datum.image.handle2.call(drag);
 
@@ -4476,6 +4501,10 @@ SpectralWorkbench.UI.ToolPaneTypes = {
       // If already has a crossSection tag, initialize handles
       var currentVal = form.el.find('.cross-section').val();
       if (currentVal && currentVal.split(',').length === 4) {
+        var c = currentVal.split(',');
+        points.a = { x: +c[0], y: +c[1] };
+        points.b = { x: +c[2], y: +c[3] };
+        form.graph.datum.image.setLine(points.a.x, points.a.y, points.b.x, points.b.y);
         setupDraggable();
       }
 

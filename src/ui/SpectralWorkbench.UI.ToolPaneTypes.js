@@ -221,26 +221,20 @@ SpectralWorkbench.UI.ToolPaneTypes = {
 
       form.customFormEl.html("<p>Click twice to set the sampling line:</p><input class='cross-section' type='text' value='0' />");
 
-      var firstClick = true;
-      var x1, y1, x2, y2;
+      var points = { a: null, b: null };
 
       form.graph.datum.image.click(function(x, y, e) {
+        if (points.a && points.b) return;
 
-        if (firstClick) {
-
-          x1 = x; y1 = y;
-          firstClick = false;
-
+        if (!points.a) {
+          points.a = { x: x, y: y };
+          form.graph.datum.image.setLine(x, y, x, y);
         } else {
-
-          x2 = x; y2 = y;
-          form.el.find('.cross-section').val(x1 + ',' + y1 + ',' + x2 + ',' + y2);
-          form.graph.datum.image.setLine(x1, y1, x2, y2);
+          points.b = { x: x, y: y };
+          form.el.find('.cross-section').val(Math.round(points.a.x) + ',' + Math.round(points.a.y) + ',' + Math.round(points.b.x) + ',' + Math.round(points.b.y));
+          form.graph.datum.image.setLine(points.a.x, points.a.y, points.b.x, points.b.y);
           setupDraggable();
-          firstClick = true;
-
         }
-
       });
 
       var setupDraggable = function() {
@@ -253,8 +247,8 @@ SpectralWorkbench.UI.ToolPaneTypes = {
           var coords = form.graph.datum.image.coords;
 
           // Convert display px to image px
-          var newX = form.graph.datum.displayPxToImagePx(d3.event.x);
-          var newY = (d3.event.y / form.graph.datum.image.el.height()) * form.graph.datum.image.height;
+          var newX = Math.max(0, Math.min(form.graph.datum.image.width, form.graph.datum.image.width * (d3.event.x / form.graph.datum.image.el.width())));
+          var newY = Math.max(0, Math.min(form.graph.datum.image.height, form.graph.datum.image.height * (d3.event.y / form.graph.datum.image.el.height())));
 
           if (isHandle1) {
             coords.x1 = newX;
@@ -279,6 +273,10 @@ SpectralWorkbench.UI.ToolPaneTypes = {
       // If already has a crossSection tag, initialize handles
       var currentVal = form.el.find('.cross-section').val();
       if (currentVal && currentVal.split(',').length === 4) {
+        var c = currentVal.split(',');
+        points.a = { x: +c[0], y: +c[1] };
+        points.b = { x: +c[2], y: +c[3] };
+        form.graph.datum.image.setLine(points.a.x, points.a.y, points.b.x, points.b.y);
         setupDraggable();
       }
 
