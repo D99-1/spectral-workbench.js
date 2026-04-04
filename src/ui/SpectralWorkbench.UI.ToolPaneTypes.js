@@ -210,34 +210,95 @@ SpectralWorkbench.UI.ToolPaneTypes = {
 
     title: "Choose cross section",
     dataType: "spectrum",
-    description: "Click the image to choose which row of pixels from the source image is used to generate your graph line. The default is 0, which is the line used if no crossSection operation is visible.",
+    description: "Click twice on the image to define a sampling line. Drag the endpoints to adjust.",
     link: "//publiclab.org/wiki/spectral-workbench-operations#crossSection",
     apply: true,
     author: "warren",
     setup: function(form) {
 
-      // shouldnt be necessary in new API, but double check:
       form.formEl.hide();
       form.el.find('.results').html('');
 
-      form.customFormEl.html("<p>Click the spectrum image or enter a row number:</p><input class='cross-section' type='text' value='0' />");
+      form.customFormEl.html("<p>Click twice to set the sampling line:</p><input class='cross-section' type='text' value='0' />");
+
+      var points = { a: null, b: null };
 
       form.graph.datum.image.click(function(x, y, e) {
+        if (points.a && points.b) return;
 
-        form.el.find('.cross-section').val(y);
-
-        form.graph.datum.image.setLine(y);
-
+        if (!points.a) {
+          points.a = { x: x, y: y };
+          form.graph.datum.image.setLine(x, y, x, y);
+        } else {
+          points.b = { x: x, y: y };
+          form.el.find('.cross-section').val(Math.round(points.a.x) + ',' + Math.round(points.a.y) + ',' + Math.round(points.b.x) + ',' + Math.round(points.b.y));
+          form.graph.datum.image.setLine(points.a.x, points.a.y, points.b.x, points.b.y);
+          setupDraggable();
+        }
       });
 
+      var setupDraggable = function() {
+
+        var drag = d3.behavior.drag();
+
+        drag.on('drag', function() {
+
+          var isHandle1 = d3.select(this).node() === form.graph.datum.image.handle1.node();
+          var coords = form.graph.datum.image.coords;
+
+          // Convert display px to image px
+          var newX = Math.max(0, Math.min(form.graph.datum.image.width, form.graph.datum.image.width * (d3.event.x / form.graph.datum.image.el.width())));
+          var newY = Math.max(0, Math.min(form.graph.datum.image.height, form.graph.datum.image.height * (d3.event.y / form.graph.datum.image.el.height())));
+
+          if (isHandle1) {
+            coords.x1 = newX;
+            coords.y1 = newY;
+          } else {
+            coords.x2 = newX;
+            coords.y2 = newY;
+          }
+
+          form.graph.datum.image.setLine(coords.x1, coords.y1, coords.x2, coords.y2);
+          form.el.find('.cross-section').val(Math.round(coords.x1) + ',' + Math.round(coords.y1) + ',' + Math.round(coords.x2) + ',' + Math.round(coords.y2));
+
+        });
+
+        form.graph.datum.image.handle1.on('.drag', null);
+        form.graph.datum.image.handle2.on('.drag', null);
+        form.graph.datum.image.handle1.call(drag);
+        form.graph.datum.image.handle2.call(drag);
+
+      }
+
+      // If already has a crossSection tag, initialize handles
+      var currentVal = form.el.find('.cross-section').val();
+      if (currentVal && currentVal.split(',').length === 4) {
+        var c = currentVal.split(',');
+        points.a = { x: +c[0], y: +c[1] };
+        points.b = { x: +c[2], y: +c[3] };
+        form.graph.datum.image.setLine(points.a.x, points.a.y, points.b.x, points.b.y);
+        setupDraggable();
+      }
+
       // restore the existing sample row indicator
-      // test this in jasmine!!!
-      form.closeEl.click(function() { form.graph.datum.image.setLine(form.graph.args.sample_row) });
+      form.closeEl.click(function() {
+        var val = form.graph.args.sample_row;
+        if (val && (val+'').split(',').length === 4) {
+          var c = val.split(',');
+          form.graph.datum.image.setLine(+c[0], +c[1], +c[2], +c[3]);
+        } else {
+          form.graph.datum.image.setLine(val);
+        }
+      });
 
       form.customFormEl.find('input').on('change', function() {
-
-        form.graph.datum.image.setLine(form.customFormEl.find('input').val());
-
+        var val = form.customFormEl.find('input').val();
+        if (val && val.split(',').length === 4) {
+          var c = val.split(',');
+          form.graph.datum.image.setLine(+c[0], +c[1], +c[2], +c[3]);
+        } else {
+          form.graph.datum.image.setLine(val);
+        }
       });
 
     },

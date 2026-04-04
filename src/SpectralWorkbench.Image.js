@@ -84,21 +84,57 @@ SpectralWorkbench.Image = Class.extend({
 
     }
 
+    /* ======================================
+     * Returns a array of pixel brightnesses in [r,g,b,a] format,
+     * values from 0-255, using bilinear interpolation for sub-pixel accuracy.
+     */
+    image.getPointBilinear = function(x, y) {
+      var x0 = Math.floor(x);
+      var x1 = Math.min(x0 + 1, image.width - 1);
+      var y0 = Math.floor(y);
+      var y1 = Math.min(y0 + 1, image.height - 1);
+
+      var dx = x - x0;
+      var dy = y - y0;
+
+      var p00 = image.getPoint(x0, y0);
+      var p10 = image.getPoint(x1, y0);
+      var p01 = image.getPoint(x0, y1);
+      var p11 = image.getPoint(x1, y1);
+
+      var r = p00[0] * (1 - dx) * (1 - dy) + p10[0] * dx * (1 - dy) + p01[0] * (1 - dx) * dy + p11[0] * dx * dy;
+      var g = p00[1] * (1 - dx) * (1 - dy) + p10[1] * dx * (1 - dy) + p01[1] * (1 - dx) * dy + p11[1] * dx * dy;
+      var b = p00[2] * (1 - dx) * (1 - dy) + p10[2] * dx * (1 - dy) + p01[2] * (1 - dx) * dy + p11[2] * dx * dy;
+      var a = p00[3] * (1 - dx) * (1 - dy) + p10[3] * dx * (1 - dy) + p01[3] * (1 - dx) * dy + p11[3] * dx * dy;
+
+      return [r, g, b, a];
+    }
+
 
     /* ======================================
      * Returns a nested array of pixels, each in the format of getPoint(), 
-     * values from 0-255
+     * values from 0-255. Supports arbitrary lines if x1, y1, x2, y2 are provided.
      */
-    image.getLine = function(y) {
+    image.getLine = function(x1, y1, x2, y2) {
 
-      var output = [],
-          input  = image.ctx.getImageData(0, y, image.width, 1).data;
+      if (arguments.length === 1) {
+        y1 = y2 = x1;
+        x1 = 0;
+        x2 = image.width;
+      }
 
-      for (var i = 0; i < input.length; i += 4) {
-        output.push([ input[i],
-                      input[i+1],
-                      input[i+2],
-                      input[i+3] ]);
+      var output = [];
+      var dx = x2 - x1;
+      var dy = y2 - y1;
+      var distance = Math.sqrt(dx*dx + dy*dy);
+      var steps = Math.round(distance);
+      if (steps === 0) steps = 1;
+
+      for (var i = 0; i < steps; i++) {
+        var t = (steps === 1) ? 0 : i / (steps - 1);
+        var x = x1 + dx * t;
+        var y = y1 + dy * t;
+        output.push(image.getPointBilinear(x, y));
       }
 
       return output;
@@ -107,25 +143,49 @@ SpectralWorkbench.Image = Class.extend({
 
 
     /* ======================================
-     * Display a horizontal line on the image, y pixels below the top edge
-     * (used for showing the image cross section)
+     * Display a line on the image using an SVG overlay.
      */
-    image.setupLine = function(y) {
+    image.setupLine = function() {
 
-      if (_graph) {
+      if (_graph && !image.svg) {
 
-        image.el.before($('<div class="section-line-container"><div class="section-line"></div></div>'));
+        image.el.before($('<div class="section-line-container"></div>'));
         image.lineContainerEl = image.container.find('.section-line-container');
-        image.lineContainerEl.css('position', 'relative');
-        image.lineEl = image.container.find('.section-line');
-        image.lineEl.css('position', 'absolute')
-                    .css('width', '100%')
-                    .css('top', 0)
-                    .css('border-bottom', '1px solid rgba(255,255,255,0.5)')
-                    .css('font-size', '9px')
-                    .css('color', 'rgba(255,255,255,0.5)')
-                    .css('text-align', 'right')
-                    .css('padding-right', '6px')
+        image.lineContainerEl.css('position', 'relative')
+                             .css('width', '100%')
+                             .css('height', 0);
+
+        image.svg = d3.select(image.lineContainerEl[0])
+          .append('svg:svg')
+          .style('position', 'absolute')
+          .style('top', 0)
+          .style('left', 0)
+          .style('width', '100%')
+          .style('height', '100%')
+          .style('pointer-events', 'none')
+          .attr('class', 'sampling-line-overlay');
+
+        image.lineEl = image.svg.append('svg:line')
+          .attr('stroke', '#ffcc00')
+          .attr('stroke-width', 2);
+
+        image.handle1 = image.svg.append('svg:circle')
+          .attr('r', 6)
+          .attr('fill', '#ffcc00')
+          .attr('stroke', '#ffaa33')
+          .attr('stroke-width', 1)
+          .attr('cursor', 'move')
+          .style('pointer-events', 'all')
+          .style('display', 'none');
+
+        image.handle2 = image.svg.append('svg:circle')
+          .attr('r', 6)
+          .attr('fill', '#ffcc00')
+          .attr('stroke', '#ffaa33')
+          .attr('stroke-width', 1)
+          .attr('cursor', 'move')
+          .style('pointer-events', 'all')
+          .style('display', 'none');
 
       }
 
@@ -133,31 +193,45 @@ SpectralWorkbench.Image = Class.extend({
 
 
     /* ======================================
-     * Display a horizontal line on the image, y pixels below the top edge
-     * in displace pixels. To use in image pixels, divide by image pixels and multiply
-     * by display height of element in pixels -- 100 by default.
-     * (used for showing the image cross section)
+     * Display a line on the image, from (x1, y1) to (x2, y2) in image pixels.
+     * If only one argument is provided, it's treated as a horizontal row.
      */
-    image.setLine = function(y) {
+    image.setLine = function(x1, y1, x2, y2) {
 
-      if (!image.lineEl) image.setupLine();
+      if (!image.svg) image.setupLine();
 
-      y -= 1; // off by one correction
-      y = y / image.height * 100; // convert to display scale
-
-      if (y > 20) {
-
-        image.lineEl.html('GRAPHED CROSS SECTION &nbsp;');
-        image.lineEl.css('margin-top', '-22px');
-
-      } else {
-
-        image.lineEl.html('');
-        image.lineEl.css('margin-top', '0');
-
+      if (arguments.length === 1) {
+        y1 = y2 = x1;
+        x1 = 0;
+        x2 = image.width;
       }
 
-      image.lineEl.css('top', y);
+      image.coords = { x1: x1, y1: y1, x2: x2, y2: y2 };
+
+      // convert to display scale
+      var displayWidth = image.el.width();
+      var displayHeight = image.el.height();
+
+      var dx1 = (x1 / image.width) * displayWidth;
+      var dy1 = (y1 / image.height) * displayHeight;
+      var dx2 = (x2 / image.width) * displayWidth;
+      var dy2 = (y2 / image.height) * displayHeight;
+
+      image.lineEl
+        .attr('x1', dx1)
+        .attr('y1', dy1)
+        .attr('x2', dx2)
+        .attr('y2', dy2);
+
+      image.handle1
+        .attr('cx', dx1)
+        .attr('cy', dy1)
+        .style('display', 'block');
+
+      image.handle2
+        .attr('cx', dx2)
+        .attr('cy', dy2)
+        .style('display', 'block');
 
       return image.lineEl;
 
@@ -245,6 +319,17 @@ SpectralWorkbench.Image = Class.extend({
                        .height(100)
                        .css('max-width', 'none')
                        .css('margin-left', 0);
+
+      }
+
+      if (image.svg) {
+
+        image.svg.attr('width', image.el.width())
+                 .css('margin-left', image.el.css('margin-left'));
+
+        if (image.coords) {
+          image.setLine(image.coords.x1, image.coords.y1, image.coords.x2, image.coords.y2);
+        }
 
       }
 

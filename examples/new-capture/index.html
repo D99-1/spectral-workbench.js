@@ -79,6 +79,16 @@
       box-shadow: 0 0 4px #ffaa33;
       pointer-events: none;
     }
+    .svg-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+    }
+    .svg-overlay circle {
+      pointer-events: all;
+      cursor: move;
+    }
     .btn-spectrum {
       background: #2c6e9e;
       border: none;
@@ -555,15 +565,117 @@
       }
     });
 
-    // ----- Image Upload Module (already working) -----
+    function setupDraggableLine(canvas, img, onUpdate) {
+      let points = { a: null, b: null };
+      let container = d3.select(canvas.parentNode);
+      container.selectAll('.svg-overlay').remove();
+      let svg = container.append('svg')
+        .attr('class', 'svg-overlay')
+        .style('width', canvas.width + 'px')
+        .style('height', canvas.height + 'px');
+
+      let line = svg.append('line')
+        .attr('stroke', '#ffcc00')
+        .attr('stroke-width', 2)
+        .style('display', 'none');
+
+      let handleA = svg.append('circle')
+        .attr('r', 6)
+        .attr('fill', '#ffcc00')
+        .attr('stroke', '#ffaa33')
+        .style('display', 'none');
+
+      let handleB = svg.append('circle')
+        .attr('r', 6)
+        .attr('fill', '#ffcc00')
+        .attr('stroke', '#ffaa33')
+        .style('display', 'none');
+
+      // Prepare offscreen canvas for data extraction (performance optimization)
+      let offCanvas = document.createElement('canvas');
+      offCanvas.width = img.width;
+      offCanvas.height = img.height;
+      let offCtx = offCanvas.getContext('2d');
+      offCtx.drawImage(img, 0, 0);
+
+      // Create a persistent SWB Image object for use in updateUI
+      let swbImg = new SpectralWorkbench.Image(null, { url: img.src });
+      swbImg.obj = img;
+      swbImg.width = img.width;
+      swbImg.height = img.height;
+      swbImg.ctx = offCtx;
+
+      function updateUI() {
+        if (points.a) {
+          handleA.attr('cx', points.a.x).attr('cy', points.a.y).style('display', 'block');
+        }
+        if (points.b) {
+          handleB.attr('cx', points.b.x).attr('cy', points.b.y).style('display', 'block');
+          line.attr('x1', points.a.x).attr('y1', points.a.y)
+              .attr('x2', points.b.x).attr('y2', points.b.y)
+              .style('display', 'block');
+        }
+        if (points.a && points.b) {
+          // Extract data
+          let scaleX = img.width / canvas.width;
+          let scaleY = img.height / canvas.height;
+          let x1 = points.a.x * scaleX;
+          let y1 = points.a.y * scaleY;
+          let x2 = points.b.x * scaleX;
+          let y2 = points.b.y * scaleY;
+
+          let rawPixels = swbImg.getLine(x1, y1, x2, y2);
+          let pixels = rawPixels.map(p => ({ r: p[0], g: p[1], b: p[2] }));
+          onUpdate(pixels, points);
+        }
+      }
+
+      let drag = d3.behavior.drag().on('drag', function() {
+        let isA = d3.select(this).node() === handleA.node();
+        let target = isA ? points.a : points.b;
+        target.x = Math.max(0, Math.min(canvas.width, d3.event.x));
+        target.y = Math.max(0, Math.min(canvas.height, d3.event.y));
+        updateUI();
+      });
+
+      handleA.call(drag);
+      handleB.call(drag);
+
+      $(canvas).off('click').on('click', function(event) {
+        if (points.a && points.b) return; // Ignore subsequent clicks
+
+        let rect = canvas.getBoundingClientRect();
+        let x = event.clientX - rect.left;
+        let y = event.clientY - rect.top;
+
+        if (!points.a) {
+          points.a = { x: x, y: y };
+        } else if (!points.b) {
+          points.b = { x: x, y: y };
+        }
+        updateUI();
+      });
+
+      return {
+        reset: function() {
+          points = { a: null, b: null };
+          updateUI();
+          line.style('display', 'none');
+          handleA.style('display', 'none');
+          handleB.style('display', 'none');
+        }
+      };
+    }
+
+    // ----- Image Upload Module -----
     let currentImage = null;
-    let selectedRow = null;
+    let uploadPixels = null;
     let previewCanvas = document.getElementById('uploadPreviewCanvas');
     let ctx = previewCanvas.getContext('2d');
     let uploadContainer = document.getElementById('uploadPreviewContainer');
-    let rowGuide = document.getElementById('rowGuide');
     let processBtn = document.getElementById('processUploadedBtn');
     let fileNameSpan = document.getElementById('uploadFileName');
+    let uploadDraggable = null;
 
     $('#triggerUploadBtn').click(() => $('#spectrumImageUpload').click());
 
@@ -582,30 +694,14 @@
           previewCanvas.height = displayHeight;
           ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
           uploadContainer.style.display = 'block';
-          selectedRow = null;
-          rowGuide.style.display = 'none';
           processBtn.disabled = true;
-          $('#rowCoordDisplay').html('Click on the image to set sample row');
-          // Click handler for row selection
-          $(previewCanvas).off('click').on('click', function(event) {
-            let rect = previewCanvas.getBoundingClientRect();
-            let scaleY = previewCanvas.height / rect.height;
-            let mouseY = (event.clientY - rect.top) * scaleY;
-            selectedRow = Math.min(Math.max(Math.floor(mouseY), 0), previewCanvas.height - 1);
-            let yPercent = (selectedRow / previewCanvas.height) * 100;
-            rowGuide.style.display = 'block';
-            rowGuide.style.top = `calc(${yPercent}% + ${previewCanvas.offsetTop}px)`;
-            rowGuide.style.width = `${previewCanvas.clientWidth}px`;
-            $('#rowCoordDisplay').html(`<i class="fa fa-chart-line"></i> Row Y = ${selectedRow} (display pixels). Ready to extract.`);
+          $('#rowCoordDisplay').html('Click twice on the image to set Point A and Point B');
+
+          if (uploadDraggable) uploadDraggable.reset();
+          uploadDraggable = setupDraggableLine(previewCanvas, img, (pixels, pts) => {
+            uploadPixels = pixels;
             processBtn.disabled = false;
-            // Redraw image and highlight row
-            ctx.drawImage(img, 0, 0, previewCanvas.width, previewCanvas.height);
-            ctx.beginPath();
-            ctx.moveTo(0, selectedRow);
-            ctx.lineTo(previewCanvas.width, selectedRow);
-            ctx.strokeStyle = '#ffcc00';
-            ctx.lineWidth = 2;
-            ctx.stroke();
+            $('#rowCoordDisplay').html(`<i class="fa fa-chart-line"></i> Line set between (${Math.round(pts.a.x)}, ${Math.round(pts.a.y)}) and (${Math.round(pts.b.x)}, ${Math.round(pts.b.y)}). Ready to extract.`);
           });
         };
         img.src = ev.target.result;
@@ -614,42 +710,23 @@
     });
 
     processBtn.addEventListener('click', () => {
-      if (!currentImage || selectedRow === null) {
-        alert('Please select a row by clicking on the image.');
-        return;
-      }
-      // Extract RGB data from the selected row (using original image dimensions)
-      let offCanvas = document.createElement('canvas');
-      offCanvas.width = currentImage.width;
-      offCanvas.height = currentImage.height;
-      let offCtx = offCanvas.getContext('2d');
-      offCtx.drawImage(currentImage, 0, 0);
-      let scaleY = currentImage.height / previewCanvas.height;
-      let originalRow = Math.floor(selectedRow * scaleY);
-      originalRow = Math.min(originalRow, currentImage.height - 1);
-      let pixels = [];
-      for (let x = 0; x < currentImage.width; x++) {
-        let pixel = offCtx.getImageData(x, originalRow, 1, 1).data;
-        pixels.push({ r: pixel[0], g: pixel[1], b: pixel[2] });
-      }
-
+      if (!uploadPixels) return;
       stepper.to(4);
       $("#capture-trigger, #setting-trigger, #landing-page-trigger").prop('disabled', true);
-      initializeFinalPlot(pixels);
+      initializeFinalPlot(uploadPixels);
     });
 
     // ----- Calibration Module -----
     window.calibVars = {
       calibImage: null,
-      calibSelectedRow: null,
       p1: { x: null, nm: null },
       p2: { x: null, nm: null }
     };
     let calibPreviewCanvas = document.getElementById('calibPreviewCanvas');
     let calibCtx = calibPreviewCanvas.getContext('2d');
     let calibUploadContainer = document.getElementById('calibPreviewContainer');
-    let calibRowGuide = document.getElementById('calibRowGuide');
     let calibFileNameSpan = document.getElementById('calibFileName');
+    let calibDraggable = null;
 
     $('#triggerCalibUploadBtn').click(() => $('#calibImageUpload').click());
 
@@ -668,21 +745,11 @@
           calibPreviewCanvas.height = displayHeight;
           calibCtx.drawImage(img, 0, 0, displayWidth, displayHeight);
           calibUploadContainer.style.display = 'block';
-          window.calibVars.calibSelectedRow = null;
-          calibRowGuide.style.display = 'none';
           $('#calibGraphSection').hide();
 
-          $(calibPreviewCanvas).off('click').on('click', function(event) {
-            let rect = calibPreviewCanvas.getBoundingClientRect();
-            let scaleY = calibPreviewCanvas.height / rect.height;
-            let mouseY = (event.clientY - rect.top) * scaleY;
-            window.calibVars.calibSelectedRow = Math.min(Math.max(Math.floor(mouseY), 0), calibPreviewCanvas.height - 1);
-            let yPercent = (window.calibVars.calibSelectedRow / calibPreviewCanvas.height) * 100;
-            calibRowGuide.style.display = 'block';
-            calibRowGuide.style.top = `calc(${yPercent}% + ${calibPreviewCanvas.offsetTop}px)`;
-            calibRowGuide.style.width = `${calibPreviewCanvas.clientWidth}px`;
-
-            extractCalibrationSpectrum();
+          if (calibDraggable) calibDraggable.reset();
+          calibDraggable = setupDraggableLine(calibPreviewCanvas, img, (pixels) => {
+            extractCalibrationSpectrum(pixels);
           });
         };
         img.src = ev.target.result;
@@ -690,24 +757,7 @@
       reader.readAsDataURL(file);
     });
 
-    function extractCalibrationSpectrum() {
-      if (!window.calibVars.calibImage || window.calibVars.calibSelectedRow === null) return;
-
-      let offCanvas = document.createElement('canvas');
-      offCanvas.width = window.calibVars.calibImage.width;
-      offCanvas.height = window.calibVars.calibImage.height;
-      let offCtx = offCanvas.getContext('2d');
-      offCtx.drawImage(window.calibVars.calibImage, 0, 0);
-      let scaleY = window.calibVars.calibImage.height / calibPreviewCanvas.height;
-      let originalRow = Math.floor(window.calibVars.calibSelectedRow * scaleY);
-      originalRow = Math.min(originalRow, window.calibVars.calibImage.height - 1);
-
-      let pixels = [];
-      for (let x = 0; x < window.calibVars.calibImage.width; x++) {
-        let pixel = offCtx.getImageData(x, originalRow, 1, 1).data;
-        pixels.push({ r: pixel[0], g: pixel[1], b: pixel[2] });
-      }
-
+    function extractCalibrationSpectrum(pixels) {
       let spectrum = createRGBSpectrum(pixels);
       $('#calibGraphSection').show();
       $('#calibGraph').empty();

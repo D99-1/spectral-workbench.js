@@ -223,21 +223,57 @@ SpectralWorkbench.Image = Class.extend({
 
     }
 
+    /* ======================================
+     * Returns a array of pixel brightnesses in [r,g,b,a] format,
+     * values from 0-255, using bilinear interpolation for sub-pixel accuracy.
+     */
+    image.getPointBilinear = function(x, y) {
+      var x0 = Math.floor(x);
+      var x1 = Math.min(x0 + 1, image.width - 1);
+      var y0 = Math.floor(y);
+      var y1 = Math.min(y0 + 1, image.height - 1);
+
+      var dx = x - x0;
+      var dy = y - y0;
+
+      var p00 = image.getPoint(x0, y0);
+      var p10 = image.getPoint(x1, y0);
+      var p01 = image.getPoint(x0, y1);
+      var p11 = image.getPoint(x1, y1);
+
+      var r = p00[0] * (1 - dx) * (1 - dy) + p10[0] * dx * (1 - dy) + p01[0] * (1 - dx) * dy + p11[0] * dx * dy;
+      var g = p00[1] * (1 - dx) * (1 - dy) + p10[1] * dx * (1 - dy) + p01[1] * (1 - dx) * dy + p11[1] * dx * dy;
+      var b = p00[2] * (1 - dx) * (1 - dy) + p10[2] * dx * (1 - dy) + p01[2] * (1 - dx) * dy + p11[2] * dx * dy;
+      var a = p00[3] * (1 - dx) * (1 - dy) + p10[3] * dx * (1 - dy) + p01[3] * (1 - dx) * dy + p11[3] * dx * dy;
+
+      return [r, g, b, a];
+    }
+
 
     /* ======================================
      * Returns a nested array of pixels, each in the format of getPoint(), 
-     * values from 0-255
+     * values from 0-255. Supports arbitrary lines if x1, y1, x2, y2 are provided.
      */
-    image.getLine = function(y) {
+    image.getLine = function(x1, y1, x2, y2) {
 
-      var output = [],
-          input  = image.ctx.getImageData(0, y, image.width, 1).data;
+      if (arguments.length === 1) {
+        y1 = y2 = x1;
+        x1 = 0;
+        x2 = image.width;
+      }
 
-      for (var i = 0; i < input.length; i += 4) {
-        output.push([ input[i],
-                      input[i+1],
-                      input[i+2],
-                      input[i+3] ]);
+      var output = [];
+      var dx = x2 - x1;
+      var dy = y2 - y1;
+      var distance = Math.sqrt(dx*dx + dy*dy);
+      var steps = Math.round(distance);
+      if (steps === 0) steps = 1;
+
+      for (var i = 0; i < steps; i++) {
+        var t = (steps === 1) ? 0 : i / (steps - 1);
+        var x = x1 + dx * t;
+        var y = y1 + dy * t;
+        output.push(image.getPointBilinear(x, y));
       }
 
       return output;
@@ -246,25 +282,49 @@ SpectralWorkbench.Image = Class.extend({
 
 
     /* ======================================
-     * Display a horizontal line on the image, y pixels below the top edge
-     * (used for showing the image cross section)
+     * Display a line on the image using an SVG overlay.
      */
-    image.setupLine = function(y) {
+    image.setupLine = function() {
 
-      if (_graph) {
+      if (_graph && !image.svg) {
 
-        image.el.before($('<div class="section-line-container"><div class="section-line"></div></div>'));
+        image.el.before($('<div class="section-line-container"></div>'));
         image.lineContainerEl = image.container.find('.section-line-container');
-        image.lineContainerEl.css('position', 'relative');
-        image.lineEl = image.container.find('.section-line');
-        image.lineEl.css('position', 'absolute')
-                    .css('width', '100%')
-                    .css('top', 0)
-                    .css('border-bottom', '1px solid rgba(255,255,255,0.5)')
-                    .css('font-size', '9px')
-                    .css('color', 'rgba(255,255,255,0.5)')
-                    .css('text-align', 'right')
-                    .css('padding-right', '6px')
+        image.lineContainerEl.css('position', 'relative')
+                             .css('width', '100%')
+                             .css('height', 0);
+
+        image.svg = d3.select(image.lineContainerEl[0])
+          .append('svg:svg')
+          .style('position', 'absolute')
+          .style('top', 0)
+          .style('left', 0)
+          .style('width', '100%')
+          .style('height', '100%')
+          .style('pointer-events', 'none')
+          .attr('class', 'sampling-line-overlay');
+
+        image.lineEl = image.svg.append('svg:line')
+          .attr('stroke', '#ffcc00')
+          .attr('stroke-width', 2);
+
+        image.handle1 = image.svg.append('svg:circle')
+          .attr('r', 6)
+          .attr('fill', '#ffcc00')
+          .attr('stroke', '#ffaa33')
+          .attr('stroke-width', 1)
+          .attr('cursor', 'move')
+          .style('pointer-events', 'all')
+          .style('display', 'none');
+
+        image.handle2 = image.svg.append('svg:circle')
+          .attr('r', 6)
+          .attr('fill', '#ffcc00')
+          .attr('stroke', '#ffaa33')
+          .attr('stroke-width', 1)
+          .attr('cursor', 'move')
+          .style('pointer-events', 'all')
+          .style('display', 'none');
 
       }
 
@@ -272,31 +332,45 @@ SpectralWorkbench.Image = Class.extend({
 
 
     /* ======================================
-     * Display a horizontal line on the image, y pixels below the top edge
-     * in displace pixels. To use in image pixels, divide by image pixels and multiply
-     * by display height of element in pixels -- 100 by default.
-     * (used for showing the image cross section)
+     * Display a line on the image, from (x1, y1) to (x2, y2) in image pixels.
+     * If only one argument is provided, it's treated as a horizontal row.
      */
-    image.setLine = function(y) {
+    image.setLine = function(x1, y1, x2, y2) {
 
-      if (!image.lineEl) image.setupLine();
+      if (!image.svg) image.setupLine();
 
-      y -= 1; // off by one correction
-      y = y / image.height * 100; // convert to display scale
-
-      if (y > 20) {
-
-        image.lineEl.html('GRAPHED CROSS SECTION &nbsp;');
-        image.lineEl.css('margin-top', '-22px');
-
-      } else {
-
-        image.lineEl.html('');
-        image.lineEl.css('margin-top', '0');
-
+      if (arguments.length === 1) {
+        y1 = y2 = x1;
+        x1 = 0;
+        x2 = image.width;
       }
 
-      image.lineEl.css('top', y);
+      image.coords = { x1: x1, y1: y1, x2: x2, y2: y2 };
+
+      // convert to display scale
+      var displayWidth = image.el.width();
+      var displayHeight = image.el.height();
+
+      var dx1 = (x1 / image.width) * displayWidth;
+      var dy1 = (y1 / image.height) * displayHeight;
+      var dx2 = (x2 / image.width) * displayWidth;
+      var dy2 = (y2 / image.height) * displayHeight;
+
+      image.lineEl
+        .attr('x1', dx1)
+        .attr('y1', dy1)
+        .attr('x2', dx2)
+        .attr('y2', dy2);
+
+      image.handle1
+        .attr('cx', dx1)
+        .attr('cy', dy1)
+        .style('display', 'block');
+
+      image.handle2
+        .attr('cx', dx2)
+        .attr('cy', dy2)
+        .style('display', 'block');
 
       return image.lineEl;
 
@@ -384,6 +458,17 @@ SpectralWorkbench.Image = Class.extend({
                        .height(100)
                        .css('max-width', 'none')
                        .css('margin-left', 0);
+
+      }
+
+      if (image.svg) {
+
+        image.svg.attr('width', image.el.width())
+                 .css('margin-left', image.el.css('margin-left'));
+
+        if (image.coords) {
+          image.setLine(image.coords.x1, image.coords.y1, image.coords.x2, image.coords.y2);
+        }
 
       }
 
@@ -1399,17 +1484,25 @@ SpectralWorkbench.Spectrum = SpectralWorkbench.Datum.extend({
 
     /* ======================================
      * Overwrite spectrum.json.data.lines, the raw JSON of the spectrum
-     * <y> is the y-position of the cross section of pixels, where 0 is the top row
+     * <y_or_x1> is the y-position or x1-position of the cross section
      * <keepCalibrated> is a boolean which indicates whether to keep or flush the calibration
      * <image> is a SpectralWorkbench.Image object, defaulting to spectrum.image
+     * <y1, x2, y2> are optional for arbitrary line sampling
      */
-    _spectrum.imgToJSON = function(y, keepCalibrated, image) {
+    _spectrum.imgToJSON = function(y_or_x1, keepCalibrated, image, y1, x2, y2) {
 
       var lines = [];
 
       image = image || _spectrum.image;
 
-      image.getLine(y).forEach(function(pixel, index) {
+      var pixelData;
+      if (arguments.length > 3) {
+        pixelData = image.getLine(y_or_x1, y1, x2, y2);
+      } else {
+        pixelData = image.getLine(y_or_x1);
+      }
+
+      pixelData.forEach(function(pixel, index) {
 
         lines.push({
           'average': +((pixel[0] + pixel[1] + pixel[2]) / 3).toPrecision(_spectrum.sigFigIntensity),
@@ -3668,7 +3761,7 @@ SpectralWorkbench.API.Operations = {
 
     description: function(tag) {
 
-      var response = "Sets the row of pixels, counting from top row, used to generate the graph.";
+      var response = "Sets the line of pixels used to generate the graph.";
 
       if (tag.datum.powertags.indexOf(tag) != 0) response += " <span style='color:#900'>Do not use this after a <b>range</b> tag.</span>";
 
@@ -3678,11 +3771,22 @@ SpectralWorkbench.API.Operations = {
 
     run: function(tag, callback) {
 
-      tag.datum.imgToJSON(tag.value);
-      tag.datum.load(); // reparse graph-format data
+      var coords = tag.value.split(',');
 
+      if (coords.length === 4) {
+
+        tag.datum.imgToJSON(+coords[0], false, false, +coords[1], +coords[2], +coords[3]);
+        tag.datum.image.setLine(+coords[0], +coords[1], +coords[2], +coords[3]);
+
+      } else {
+
+        tag.datum.imgToJSON(tag.value);
+        tag.datum.image.setLine(tag.value);
+
+      }
+
+      tag.datum.load(); // reparse graph-format data
       tag.datum.graph.args.sample_row = tag.value;
-      tag.datum.image.setLine(tag.value);
 
       if (callback) callback(tag);
 
@@ -4334,34 +4438,95 @@ SpectralWorkbench.UI.ToolPaneTypes = {
 
     title: "Choose cross section",
     dataType: "spectrum",
-    description: "Click the image to choose which row of pixels from the source image is used to generate your graph line. The default is 0, which is the line used if no crossSection operation is visible.",
+    description: "Click twice on the image to define a sampling line. Drag the endpoints to adjust.",
     link: "//publiclab.org/wiki/spectral-workbench-operations#crossSection",
     apply: true,
     author: "warren",
     setup: function(form) {
 
-      // shouldnt be necessary in new API, but double check:
       form.formEl.hide();
       form.el.find('.results').html('');
 
-      form.customFormEl.html("<p>Click the spectrum image or enter a row number:</p><input class='cross-section' type='text' value='0' />");
+      form.customFormEl.html("<p>Click twice to set the sampling line:</p><input class='cross-section' type='text' value='0' />");
+
+      var points = { a: null, b: null };
 
       form.graph.datum.image.click(function(x, y, e) {
+        if (points.a && points.b) return;
 
-        form.el.find('.cross-section').val(y);
-
-        form.graph.datum.image.setLine(y);
-
+        if (!points.a) {
+          points.a = { x: x, y: y };
+          form.graph.datum.image.setLine(x, y, x, y);
+        } else {
+          points.b = { x: x, y: y };
+          form.el.find('.cross-section').val(Math.round(points.a.x) + ',' + Math.round(points.a.y) + ',' + Math.round(points.b.x) + ',' + Math.round(points.b.y));
+          form.graph.datum.image.setLine(points.a.x, points.a.y, points.b.x, points.b.y);
+          setupDraggable();
+        }
       });
 
+      var setupDraggable = function() {
+
+        var drag = d3.behavior.drag();
+
+        drag.on('drag', function() {
+
+          var isHandle1 = d3.select(this).node() === form.graph.datum.image.handle1.node();
+          var coords = form.graph.datum.image.coords;
+
+          // Convert display px to image px
+          var newX = Math.max(0, Math.min(form.graph.datum.image.width, form.graph.datum.image.width * (d3.event.x / form.graph.datum.image.el.width())));
+          var newY = Math.max(0, Math.min(form.graph.datum.image.height, form.graph.datum.image.height * (d3.event.y / form.graph.datum.image.el.height())));
+
+          if (isHandle1) {
+            coords.x1 = newX;
+            coords.y1 = newY;
+          } else {
+            coords.x2 = newX;
+            coords.y2 = newY;
+          }
+
+          form.graph.datum.image.setLine(coords.x1, coords.y1, coords.x2, coords.y2);
+          form.el.find('.cross-section').val(Math.round(coords.x1) + ',' + Math.round(coords.y1) + ',' + Math.round(coords.x2) + ',' + Math.round(coords.y2));
+
+        });
+
+        form.graph.datum.image.handle1.on('.drag', null);
+        form.graph.datum.image.handle2.on('.drag', null);
+        form.graph.datum.image.handle1.call(drag);
+        form.graph.datum.image.handle2.call(drag);
+
+      }
+
+      // If already has a crossSection tag, initialize handles
+      var currentVal = form.el.find('.cross-section').val();
+      if (currentVal && currentVal.split(',').length === 4) {
+        var c = currentVal.split(',');
+        points.a = { x: +c[0], y: +c[1] };
+        points.b = { x: +c[2], y: +c[3] };
+        form.graph.datum.image.setLine(points.a.x, points.a.y, points.b.x, points.b.y);
+        setupDraggable();
+      }
+
       // restore the existing sample row indicator
-      // test this in jasmine!!!
-      form.closeEl.click(function() { form.graph.datum.image.setLine(form.graph.args.sample_row) });
+      form.closeEl.click(function() {
+        var val = form.graph.args.sample_row;
+        if (val && (val+'').split(',').length === 4) {
+          var c = val.split(',');
+          form.graph.datum.image.setLine(+c[0], +c[1], +c[2], +c[3]);
+        } else {
+          form.graph.datum.image.setLine(val);
+        }
+      });
 
       form.customFormEl.find('input').on('change', function() {
-
-        form.graph.datum.image.setLine(form.customFormEl.find('input').val());
-
+        var val = form.customFormEl.find('input').val();
+        if (val && val.split(',').length === 4) {
+          var c = val.split(',');
+          form.graph.datum.image.setLine(+c[0], +c[1], +c[2], +c[3]);
+        } else {
+          form.graph.datum.image.setLine(val);
+        }
       });
 
     },

@@ -118,7 +118,7 @@ SpectralWorkbench.API.Operations = {
 
     description: function(tag) {
 
-      var response = "Sets the row of pixels, counting from top row, used to generate the graph.";
+      var response = "Sets the line of pixels used to generate the graph.";
 
       if (tag.datum.powertags.indexOf(tag) != 0) response += " <span style='color:#900'>Do not use this after a <b>range</b> tag.</span>";
 
@@ -128,11 +128,22 @@ SpectralWorkbench.API.Operations = {
 
     run: function(tag, callback) {
 
-      tag.datum.imgToJSON(tag.value);
-      tag.datum.load(); // reparse graph-format data
+      var coords = tag.value.split(',');
 
+      if (coords.length === 4) {
+
+        tag.datum.imgToJSON(+coords[0], false, false, +coords[1], +coords[2], +coords[3]);
+        tag.datum.image.setLine(+coords[0], +coords[1], +coords[2], +coords[3]);
+
+      } else {
+
+        tag.datum.imgToJSON(tag.value);
+        tag.datum.image.setLine(tag.value);
+
+      }
+
+      tag.datum.load(); // reparse graph-format data
       tag.datum.graph.args.sample_row = tag.value;
-      tag.datum.image.setLine(tag.value);
 
       if (callback) callback(tag);
 
