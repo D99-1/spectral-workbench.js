@@ -363,7 +363,7 @@
           <div id="graph1"></div>
         </div>
         <div class="toolbar" style="margin-top: 10px; margin-bottom: 10px;">
-          <button class="btn btn-info" id="btn-flip-plotting"><i class="fa fa-refresh"></i> Flip Direction</button>
+          <button class="btn btn-info" id="btn-flip-plotting"><i class="fa fa-refresh"></i> Flip Image Horizontally</button>
           <button class="btn btn-default" id="btn-export-csv"><i class="fa fa-download"></i> Export CSV</button>
           <button class="btn btn-primary" id="btn-to-calibration"><i class="fa fa-arrow-right"></i> Proceed to Calibration</button>
         </div>
@@ -429,7 +429,7 @@
             </div>
 
             <div style="margin-top: 20px; text-align: center;">
-              <button class="btn btn-info btn-lg" id="btn-flip-calib"><i class="fa fa-refresh"></i> Flip Direction</button>
+              <button class="btn btn-info btn-lg" id="btn-flip-calib"><i class="fa fa-refresh"></i> Flip Image Horizontally</button>
               <button class="btn btn-success btn-lg" id="btn-apply-calibration" disabled><i class="fa fa-check"></i> Apply Calibration</button>
             </div>
           </div>
@@ -616,23 +616,6 @@
       ctx.clearRect(0, 0, w, h);
 
       if (calibratedLines) {
-        let startW = extent ? extent[0] : calibratedLines[0].wavelength;
-        let endW = extent ? extent[1] : calibratedLines[calibratedLines.length - 1].wavelength;
-
-        // Check for UV/IR ranges
-        let avgW = (startW + endW) / 2;
-        if (avgW < 380) {
-          label.innerText = "UV";
-          container.classList.add('dotted-border');
-          container.style.backgroundColor = 'white';
-          return;
-        } else if (avgW > 780) {
-          label.innerText = "IR";
-          container.classList.add('dotted-border');
-          container.style.backgroundColor = 'white';
-          return;
-        }
-
         let visibleLines = calibratedLines;
         if (extent) {
           visibleLines = calibratedLines.filter(l => l.wavelength >= extent[0] && l.wavelength <= extent[1]);
@@ -640,12 +623,58 @@
         if (visibleLines.length === 0) return;
 
         let step = w / visibleLines.length;
+        let uvRegions = [];
+        let irRegions = [];
+        let currentRegion = null;
+
         visibleLines.forEach((line, i) => {
-          let baseColor = wavelengthToRGB(line.wavelength);
-          let intensity = line.average / 255;
-          ctx.fillStyle = `rgb(${Math.round(baseColor.r * intensity)},${Math.round(baseColor.g * intensity)},${Math.round(baseColor.b * intensity)})`;
-          ctx.fillRect(i * step, 0, step + 1, h);
+          let x = i * step;
+          if (line.wavelength < 380) {
+            ctx.fillStyle = "white";
+            ctx.fillRect(x, 0, step + 1, h);
+            if (!currentRegion || currentRegion.type !== 'UV') {
+              currentRegion = { type: 'UV', startX: x };
+              uvRegions.push(currentRegion);
+            }
+            currentRegion.endX = x + step;
+          } else if (line.wavelength > 780) {
+            ctx.fillStyle = "white";
+            ctx.fillRect(x, 0, step + 1, h);
+            if (!currentRegion || currentRegion.type !== 'IR') {
+              currentRegion = { type: 'IR', startX: x };
+              irRegions.push(currentRegion);
+            }
+            currentRegion.endX = x + step;
+          } else {
+            currentRegion = { type: 'Visible' };
+            let baseColor = wavelengthToRGB(line.wavelength);
+            let intensity = line.average / 255;
+            ctx.fillStyle = `rgb(${Math.round(baseColor.r * intensity)},${Math.round(baseColor.g * intensity)},${Math.round(baseColor.b * intensity)})`;
+            ctx.fillRect(x, 0, step + 1, h);
+          }
         });
+
+        // Draw labels and dotted borders for UV/IR regions
+        ctx.strokeStyle = "#666";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "bold 10px Arial";
+
+        [...uvRegions, ...irRegions].forEach(region => {
+          let rw = region.endX - region.startX;
+          if (rw > 5) {
+            ctx.beginPath();
+            ctx.rect(region.startX + 0.5, 0.5, rw - 1, h - 1);
+            ctx.stroke();
+            if (rw > 20) {
+              ctx.fillStyle = "#333";
+              ctx.fillText(region.type, region.startX + rw / 2, h / 2);
+            }
+          }
+        });
+        ctx.setLineDash([]); // Reset dash
         return;
       }
 
@@ -1131,7 +1160,7 @@
       }
     });
 
-    function applyCalibrationToTarget(m, c) {
+    window.applyCalibrationToTarget = function(m, c) {
       let targetWidth = window.targetPixels.length;
       let lines = window.targetPixels.map((pixel, idx) => {
         let normalizedX = idx / (targetWidth - 1);
@@ -1145,6 +1174,8 @@
       });
 
       let spectrum = new SpectralWorkbench.Spectrum({ data: { lines: lines } });
+      // Ensure the spectrum is recognized as calibrated by SpectralWorkbench
+      spectrum.json = { data: { lines: lines } };
       $('#graph-final').empty();
       calibratedGraph = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
 

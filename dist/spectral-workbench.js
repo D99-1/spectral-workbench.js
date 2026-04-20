@@ -5595,7 +5595,7 @@ SpectralWorkbench.Graph = Class.extend({
         if (_graph.args.calibrated) label = 'Wavelength (nm)';
         else label = "Distance along line (pixels)";
 
-      } else if (_graph.dataType == 'spectrum' && _graph.datum.isCalibrated()) {
+      } else if ((_graph.dataType == 'spectrum' || _graph.args.calibrated) && _graph.datum.isCalibrated()) {
 
         label = 'Wavelength (nm)';
 
@@ -5770,10 +5770,10 @@ SpectralWorkbench.Graph = Class.extend({
 
       if (d3.select('.nv-axislabel').html() == "Wavelength (eV)") {
 
-        _graph.chart.xAxis.axisLabel('Wavelength (nanometers)');
+        _graph.chart.xAxis.axisLabel('Wavelength (nm)');
         var unitChange = function(d) { d.x = 1239.82/d.x; return d; }
 
-      } else if (d3.select('.nv-axislabel').html() == "Wavelength (nanometers)") {
+      } else if (d3.select('.nv-axislabel').html() == "Wavelength (nm)") {
 
         _graph.chart.xAxis.axisLabel('Wavelength (eV)');
         var unitChange = function(d) { d.x = 1239.82/d.x; return d; }
