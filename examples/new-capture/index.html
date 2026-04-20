@@ -6,6 +6,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="An open source spectral library and DIY spectrometry community developing environmental testing techniques.">
   <meta name="author" content="Public Lab contributors">
+ <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-T9B7LYLR2B"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-T9B7LYLR2B');
+</script>
 
   <link rel="apple-touch-icon" href="//spectralworkbench.org/images/spectral-workbench-256.png">
   <link rel="apple-touch-fa-precomposed" href="//spectralworkbench.org/images/spectral-workbench-256.png">
@@ -171,8 +180,8 @@
   <![endif]-->
 </head>
 
-<body class="full-strecth-block">
-  <div class="full-strecth-block bs-stepper">
+<body class="full-stretch-block">
+  <div class="full-stretch-block bs-stepper">
     <div class="bs-stepper-header" role="tablist">
       <div class="step" data-target="#landing-page">
         <button type="button" class="step-trigger" role="tab" aria-controls="landing-page" id="landing-page-trigger">
@@ -211,12 +220,12 @@
       </div>
     </div>
 
-    <div class="capture full-strecth-block bs-stepper-content" id="main-content">
+    <div class="capture full-stretch-block bs-stepper-content" id="main-content">
       <!-- Landing Page -->
-      <div id="landing-page" class="full-strecth-flex-vertical content" role="tabpanel">
+      <div id="landing-page" class="full-stretch-flex-vertical content" role="tabpanel">
         <div id="landing-page-content">
           <h1> 
-            <img src="./asset//logo.png">
+            <img src="./asset//logo.png" alt="Spectral Workbench Logo">
             Spectral WorkBench
           </h1>
           <br><br>
@@ -231,7 +240,7 @@
 
           <!-- Upload Card -->
           <div class="upload-card">
-            <h4><i class="fa fa-upload"></i> Upload an Image</h4>
+            <h4><i class="fa fa-upload" aria-hidden="true"></i> Upload an Image</h4>
             <p>Analyze a spectrum from your own image file (JPEG/PNG). Click on the preview to set the sample row (yellow bar).</p>
             <p><b>Click on the image to make two points on the opposite sides of the spectrum to create a line that goes through the whole spectrum</b></p>
             <input type="file" id="spectrumImageUpload" accept="image/jpeg,image/png" style="display:none;">
@@ -265,7 +274,7 @@
 
       <!-- Settings (unchanged) -->
       <div id="settings" class="content" role="tabpanel">
-        <div class="full-strecth-flex-vertical center-content">
+        <div class="full-stretch-flex-vertical center-content">
           <div id="webcam-msg"><p><b>Requesting camera access...  Please click "Allow" when prompted.</b></p></div>
           <div id="webcam">
             <div id="heightIndicator" style="display:none;position:absolute;margin:0;z-index:999;border-right:0px solid #ff4;border-bottom:2px solid #ff4;height:1px;margin-top:120px;width:320px;font-weight:bold;">
@@ -291,9 +300,9 @@
             })
           </script>
           <p style="padding-top:5px;">
-            <a rel="tooltip" title="" class="btn btn-default" onclick="$W.auto_detect_sample_row()" data-original-title="Auto select sample row"><i class="fa fa-white fa-arrows-v"></i> Auto-select Sample Row</a>
-            <a rel="tooltip" title="Flip video horizontally" class="btn btn-default btn-flip" onClick="$W.flip_horizontal()"><i class="fa fa-white fa-arrows-h"></i> Flip image</a>
-            <a rel="tooltip" title="Rotate video 90 &deg;" class="btn btn-default btn-rotate" onClick="$W.toggle_rotation()"><i class="fa fa-white fa-rotate-right"></i> Rotate</a>
+            <a rel="tooltip" title="" class="btn btn-default" onclick="$W.auto_detect_sample_row()" data-original-title="Auto select sample row" aria-label="Auto-select Sample Row"><i class="fa fa-white fa-arrows-v" aria-hidden="true"></i> Auto-select Sample Row</a>
+            <a rel="tooltip" title="Flip video horizontally" class="btn btn-default btn-flip" onClick="$W.flip_horizontal()" aria-label="Flip image horizontally"><i class="fa fa-white fa-arrows-h" aria-hidden="true"></i> Flip image</a>
+            <a rel="tooltip" title="Rotate video 90 &deg;" class="btn btn-default btn-rotate" onClick="$W.toggle_rotation()" aria-label="Rotate image 90 degrees"><i class="fa fa-white fa-rotate-right" aria-hidden="true"></i> Rotate</a>
           </p>
           <div class="select" style="padding-top:5px;">
             <label for="videoSource">Camera source: </label><select id="videoSource"></select>
@@ -306,7 +315,7 @@
 
       <!-- Capture (unchanged) -->
       <div id="capture" class="content center-content" role="tabpanel">
-        <div class="full-strecth-flex-horizontal center-content">
+        <div class="full-stretch-flex-horizontal center-content">
           <div style="width: 28em; margin-right: 1em">
             <div id="sidebar" style="width: 26em; margin: 2em auto 2em auto">
               <div class="hidden-phone" >
@@ -314,9 +323,9 @@
                 <canvas style="width:100%;height:100px;" id="preview"></canvas>
               </div>
               <div class="btn-group toolbar" data-toggle="buttons-checkbox" style="margin-bottom:2em; margin-left: 9em; margin-top: 2em">
-                <a rel="tooltip" title="Rotate video" class="btn btn-default btn-rotate" onClick="$W.toggle_rotation()"><i class="fa fa-white fa-repeat"></i></a>
-                <a rel="tooltip" title="Flip video horizontally" class="btn btn-default btn-flip" onClick="$W.flip_horizontal()"><i class="fa fa-white fa-arrows-h"></i></a>
-                <a rel="tooltip" title="Scale video" class="btn btn-default" onClick="$W.scale_h = parseFloat(prompt('Enter a horizontal scaling factor (default is 1):'))"><i class="fa fa-white fa-expand"></i></a>
+                <a rel="tooltip" title="Rotate video" class="btn btn-default btn-rotate" onClick="$W.toggle_rotation()" aria-label="Rotate video"><i class="fa fa-white fa-repeat" aria-hidden="true"></i></a>
+                <a rel="tooltip" title="Flip video horizontally" class="btn btn-default btn-flip" onClick="$W.flip_horizontal()" aria-label="Flip video horizontally"><i class="fa fa-white fa-arrows-h" aria-hidden="true"></i></a>
+                <a rel="tooltip" title="Scale video" class="btn btn-default" onClick="$W.scale_h = parseFloat(prompt('Enter a horizontal scaling factor (default is 1):'))" aria-label="Scale video"><i class="fa fa-white fa-expand" aria-hidden="true"></i></a>
               </div>
               <p>Note: Use the tools above to make adjustment of the capturing. To adjust the sampling yellow bar location, go back to the previous step.</p>
               <script>
@@ -337,9 +346,9 @@
           <div id="capture-phase-right" style="width: 50em;">
             <div style="width: 48em;">
               <div class="btn-group toolbar" data-toggle="buttons-radio">
-                <a rel="tooltip" title="Default mode" class="btn btn-default btn-sm" onClick="$W.toggle_mode()"><i class="fa fa-white fa-circle-o"></i></a>
-                <a rel="tooltip" title="RGB mode" class="btn btn-default btn-sm" onClick="$W.toggle_mode()"><i class="fa fa-white fa fa-adjust"></i></a>
-                <a rel="tooltip" title="Combined readout" class="btn btn-default btn-sm" onClick="$W.show_combined()"><i class="fa fa-white fa fa-list-ul"></i></a>
+                <a rel="tooltip" title="Default mode" class="btn btn-default btn-sm" onClick="$W.toggle_mode()" aria-label="Default mode"><i class="fa fa-white fa-circle-o" aria-hidden="true"></i></a>
+                <a rel="tooltip" title="RGB mode" class="btn btn-default btn-sm" onClick="$W.toggle_mode()" aria-label="RGB mode"><i class="fa fa-white fa fa-adjust" aria-hidden="true"></i></a>
+                <a rel="tooltip" title="Combined readout" class="btn btn-default btn-sm" onClick="$W.show_combined()" aria-label="Combined readout"><i class="fa fa-white fa fa-list-ul" aria-hidden="true"></i></a>
               </div>
               <div id="graph" style="width: 100%; margin-bottom:2em"></div>
               <canvas style="background:#333;width:100%;height:100px;width: 96%;margin-left: 1.8em;" id="canvas"></canvas>
@@ -385,8 +394,8 @@
 
       <!-- Calibration -->
       <div id="calibration" class="content center-content" role="tabpanel">
-        <div class="full-strecth-flex-vertical center-content" style="padding: 20px; width: 100%; max-width: 1200px;">
-          <h3><i class="fa fa-crosshairs"></i> Step 5: Wavelength Calibration</h3>
+        <div class="full-stretch-flex-vertical center-content" style="padding: 20px; width: 100%; max-width: 1200px;">
+          <h3><i class="fa fa-crosshairs" aria-hidden="true"></i> Step 5: Wavelength Calibration</h3>
           <p>Upload an image of a known light source (e.g., CFL bulb) to calibrate your spectrometer.</p>
 
           <div class="upload-card" style="width: 100%; border: 1px solid #ddd; border-radius: 8px;">
@@ -417,13 +426,13 @@
             <div class="row" style="margin-top: 15px;">
               <div class="col-md-6">
                 <div class="input-group">
-                  <span class="input-group-addon">Point 1 (Pixel: <span id="p1-pixel">-</span>)</span>
+                  <label class="input-group-addon" for="p1-nm" style="min-width: 200px;">Point 1 (Pixel: <span id="p1-pixel">-</span>)</label>
                   <input type="number" id="p1-nm" class="form-control" placeholder="Wavelength 1 (nm)">
                 </div>
               </div>
               <div class="col-md-6">
                 <div class="input-group">
-                  <span class="input-group-addon">Point 2 (Pixel: <span id="p2-pixel">-</span>)</span>
+                  <label class="input-group-addon" for="p2-nm" style="min-width: 200px;">Point 2 (Pixel: <span id="p2-pixel">-</span>)</label>
                   <input type="number" id="p2-nm" class="form-control" placeholder="Wavelength 2 (nm)">
                 </div>
               </div>
@@ -447,8 +456,8 @@
           <div id="graph-final" style="height: 400px; width: 100%;"></div>
         </div>
         <div class="toolbar" style="margin-top: 10px; margin-bottom: 10px;">
-          <button class="btn btn-default" id="btn-export-final-csv"><i class="fa fa-download"></i> Export Calibrated CSV</button>
-          <button class="btn btn-primary" id="restart-final"><i class="fa fa-refresh"></i> Start Over</button>
+          <button class="btn btn-default" id="btn-export-final-csv"><i class="fa fa-download" aria-hidden="true"></i> Export Calibrated CSV</button>
+          <button class="btn btn-primary" id="restart-final"><i class="fa fa-refresh" aria-hidden="true"></i> Start Over</button>
         </div>
         <div id="final-note" style="background: #dedede; padding: 15px; border-radius: 5px; margin-top: 10px; color: #333;">
           This graph shows your captured spectrum calibrated using the provided reference.
