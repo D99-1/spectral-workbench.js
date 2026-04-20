@@ -5589,19 +5589,20 @@ SpectralWorkbench.Graph = Class.extend({
      */
     _graph.setUnits = function() {
 
+      var label = "";
       if (!_graph.datum) {
 
-        if (_graph.args.calibrated) _graph.xUnit = 'nanometers';
-        else _graph.xUnit = "uncalibrated pixels";
+        if (_graph.args.calibrated) label = 'Wavelength (nm)';
+        else label = "Distance along line (pixels)";
 
       } else if (_graph.dataType == 'spectrum' && _graph.datum.isCalibrated()) {
 
-        _graph.xUnit = 'nanometers';
+        label = 'Wavelength (nm)';
 
-      } else _graph.xUnit = "uncalibrated pixels";
+      } else label = "Distance along line (pixels)";
  
       _graph.chart.xAxis     //Chart x-axis settings
-                  .axisLabel('Wavelength ('+_graph.xUnit+')')
+                  .axisLabel(label)
                   .tickFormat(d3.format('1r'));
  
       _graph.chart.yAxis     //Chart y-axis settings
