@@ -392,6 +392,7 @@
           <div class="upload-card" style="width: 100%; border: 1px solid #ddd; border-radius: 8px;">
             <input type="file" id="calibImageUpload" accept="image/jpeg,image/png" style="display:none;">
             <button class="btn btn-spectrum" id="triggerCalibUploadBtn"><i class="fa fa-folder-open"></i> Choose Calibration Image</button>
+            <button class="btn btn-info" id="btn-rough-calib" style="margin-left:10px;"><i class="fa fa-magic"></i> Rough Calibration</button>
             <span id="calibFileName" style="margin-left:10px;"></span>
 
             <div id="calibPreviewContainer" class="upload-preview-area" style="display:none; position: relative;">
@@ -1099,6 +1100,20 @@
         $('#btn-apply-calibration').prop('disabled', true);
       }
     }
+
+    $('#btn-rough-calib').click(() => {
+      if (uploadPixels) {
+        extractCalibrationSpectrum(uploadPixels);
+        // Reset calibration points since the spectrum changed
+        window.calibVars.p1.x = null;
+        window.calibVars.p2.x = null;
+        $('#p1-pixel').text('-');
+        $('#p2-pixel').text('-');
+        $('#btn-apply-calibration').prop('disabled', true);
+      } else {
+        alert("No sampling data available from the plotting step. Please set points on an image first.");
+      }
+    });
 
     function flipDirection(pixels, callback) {
       if (!pixels) return;
