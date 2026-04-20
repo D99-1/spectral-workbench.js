@@ -144,6 +144,35 @@
     #calibGraph svg {
       cursor: crosshair !important;
     }
+    .color-bar-container {
+      width: 100%;
+      height: 15px;
+      margin-bottom: 5px;
+      border: 1px solid #ccc;
+      overflow: hidden;
+      position: relative;
+    }
+    .color-bar-canvas {
+      width: 100%;
+      height: 100%;
+    }
+    .color-bar-label {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      pointer-events: none;
+      color: #333;
+      font-size: 10px;
+    }
+    .dotted-border {
+      border: 1px dotted #666;
+    }
   </style>
 
   <!--[if lt IE 9]>
@@ -213,9 +242,10 @@
           <div class="upload-card">
             <h4><i class="fa fa-upload" aria-hidden="true"></i> Upload an Image</h4>
             <p>Analyze a spectrum from your own image file (JPEG/PNG). Click on the preview to set the sample row (yellow bar).</p>
-            <input type="file" id="spectrumImageUpload" accept="image/jpeg,image/png" style="display:none;" aria-label="Upload spectrum image">
-            <button class="btn btn-spectrum" id="triggerUploadBtn"><i class="fa fa-folder-open" aria-hidden="true"></i> Choose Image</button>
-            <button class="btn btn-spectrum" id="processUploadedBtn" disabled><i class="fa fa-chart-line" aria-hidden="true"></i> Extract & Plot</button>
+            <p><b>Click on the image to make two points on the opposite sides of the spectrum to create a line that goes through the whole spectrum</b></p>
+            <input type="file" id="spectrumImageUpload" accept="image/jpeg,image/png" style="display:none;">
+            <button class="btn btn-spectrum" id="triggerUploadBtn"><i class="fa fa-folder-open"></i> Choose Image</button>
+            <button class="btn btn-spectrum" id="processUploadedBtn" disabled><i class="fa fa-chart-line"></i> Extract & Plot</button>
             <span id="uploadFileName" style="margin-left:10px;"></span>
             <div id="uploadPreviewContainer" class="upload-preview-area" style="display:none;">
               <div style="position:relative; display:inline-block;">
@@ -336,11 +366,15 @@
       <!-- Plotting (enhanced) -->
       <div id="plotting" class="content center-content" role="tabpanel">
         <div class="swb-graphing center-content" style="width: 100%;">
+          <div class="color-bar-container" id="plotting-color-bar-container">
+            <canvas id="plotting-color-bar" class="color-bar-canvas"></canvas>
+          </div>
           <div id="graph1"></div>
         </div>
         <div class="toolbar" style="margin-top: 10px; margin-bottom: 10px;">
-          <button class="btn btn-default" id="btn-export-csv"><i class="fa fa-download" aria-hidden="true"></i> Export CSV</button>
-          <button class="btn btn-primary" id="btn-to-calibration"><i class="fa fa-arrow-right" aria-hidden="true"></i> Proceed to Calibration</button>
+          <button class="btn btn-info" id="btn-flip-plotting"><i class="fa fa-refresh"></i> Flip Image Horizontally</button>
+          <button class="btn btn-default" id="btn-export-csv"><i class="fa fa-download"></i> Export CSV</button>
+          <button class="btn btn-primary" id="btn-to-calibration"><i class="fa fa-arrow-right"></i> Proceed to Calibration</button>
         </div>
         <div id="plotting-note">
           Use the bottom graph as the navigator to zoom into any section of the plot by dragging
@@ -365,8 +399,9 @@
           <p>Upload an image of a known light source (e.g., CFL bulb) to calibrate your spectrometer.</p>
 
           <div class="upload-card" style="width: 100%; border: 1px solid #ddd; border-radius: 8px;">
-            <input type="file" id="calibImageUpload" accept="image/jpeg,image/png" style="display:none;" aria-label="Upload calibration image">
-            <button class="btn btn-spectrum" id="triggerCalibUploadBtn"><i class="fa fa-folder-open" aria-hidden="true"></i> Choose Calibration Image</button>
+            <input type="file" id="calibImageUpload" accept="image/jpeg,image/png" style="display:none;">
+            <button class="btn btn-spectrum" id="triggerCalibUploadBtn"><i class="fa fa-folder-open"></i> Choose Calibration Image</button>
+            <button class="btn btn-info" id="btn-rough-calib" style="margin-left:10px;"><i class="fa fa-magic"></i> Rough Calibration</button>
             <span id="calibFileName" style="margin-left:10px;"></span>
 
             <div id="calibPreviewContainer" class="upload-preview-area" style="display:none; position: relative;">
@@ -381,9 +416,12 @@
           <div id="calibGraphSection" style="display:none; width: 100%; margin-top: 20px;">
             <h4>Calibration Spectrum</h4>
             <div style="position: relative;">
+              <div class="color-bar-container" id="calib-color-bar-container">
+                <canvas id="calib-color-bar" class="color-bar-canvas"></canvas>
+              </div>
               <div id="calibGraph" style="height: 300px; width: 100%;"></div>
             </div>
-            <p class="text-muted">Zoom in and click on two known peaks to calibrate. (Click again to reset)</p>
+            <p class="text-muted">Click on two known peaks, and enter the wavelength.</p>
 
             <div class="row" style="margin-top: 15px;">
               <div class="col-md-6">
@@ -401,7 +439,8 @@
             </div>
 
             <div style="margin-top: 20px; text-align: center;">
-              <button class="btn btn-success btn-lg" id="btn-apply-calibration" disabled><i class="fa fa-check" aria-hidden="true"></i> Apply Calibration</button>
+              <button class="btn btn-info btn-lg" id="btn-flip-calib"><i class="fa fa-refresh"></i> Flip Image Horizontally</button>
+              <button class="btn btn-success btn-lg" id="btn-apply-calibration" disabled><i class="fa fa-check"></i> Apply Calibration</button>
             </div>
           </div>
         </div>
@@ -410,7 +449,10 @@
       <!-- Final Results -->
       <div id="final-results" class="content center-content" role="tabpanel">
         <div class="swb-graphing center-content" style="width: 100%; max-width: 1200px;">
-          <h3><i class="fa fa-chart-line" aria-hidden="true"></i> Final Calibrated Spectrum</h3>
+          <h3><i class="fa fa-chart-line"></i> Final Calibrated Spectrum</h3>
+          <div class="color-bar-container" id="final-color-bar-container">
+            <canvas id="final-color-bar" class="color-bar-canvas"></canvas>
+          </div>
           <div id="graph-final" style="height: 400px; width: 100%;"></div>
         </div>
         <div class="toolbar" style="margin-top: 10px; margin-bottom: 10px;">
@@ -510,6 +552,191 @@
     window.calibratedGraph = null;
     window.targetPixels = null;
 
+    function wavelengthToRGB(wavelength) {
+      let r, g, b, factor;
+      if (wavelength >= 380 && wavelength < 440) {
+        r = -(wavelength - 440) / (440 - 380);
+        g = 0.0;
+        b = 1.0;
+      } else if (wavelength >= 440 && wavelength < 490) {
+        r = 0.0;
+        g = (wavelength - 440) / (490 - 440);
+        b = 1.0;
+      } else if (wavelength >= 490 && wavelength < 510) {
+        r = 0.0;
+        g = 1.0;
+        b = -(wavelength - 510) / (510 - 490);
+      } else if (wavelength >= 510 && wavelength < 580) {
+        r = (wavelength - 510) / (580 - 510);
+        g = 1.0;
+        b = 0.0;
+      } else if (wavelength >= 580 && wavelength < 645) {
+        r = 1.0;
+        g = -(wavelength - 645) / (645 - 580);
+        b = 0.0;
+      } else if (wavelength >= 645 && wavelength <= 780) {
+        r = 1.0;
+        g = 0.0;
+        b = 0.0;
+      } else {
+        r = 0.0;
+        g = 0.0;
+        b = 0.0;
+      }
+
+      // Intensity factor for fading at edges
+      if (wavelength >= 380 && wavelength < 420) {
+        factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380);
+      } else if (wavelength >= 420 && wavelength <= 700) {
+        factor = 1.0;
+      } else if (wavelength > 700 && wavelength <= 780) {
+        factor = 0.3 + 0.7 * (780 - wavelength) / (780 - 700);
+      } else {
+        factor = 0.0;
+      }
+
+      const gamma = 0.8;
+      const intensityMax = 255;
+      const adjust = (c, f) => Math.round(intensityMax * Math.pow(c * f, gamma));
+
+      return {
+        r: adjust(r, factor),
+        g: adjust(g, factor),
+        b: adjust(b, factor)
+      };
+    }
+
+    function updateColorBar(canvasId, pixels, extent, calibratedLines) {
+      let canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+
+      // Ensure canvas resolution matches display size to prevent stretching
+      let displayWidth = canvas.clientWidth;
+      let displayHeight = canvas.clientHeight || 15;
+      if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+      }
+
+      let container = canvas.parentNode;
+      let label = container.querySelector('.color-bar-label');
+      if (!label) {
+        label = document.createElement('div');
+        label.className = 'color-bar-label';
+        container.appendChild(label);
+      }
+      label.innerText = "";
+      container.classList.remove('dotted-border');
+      container.style.backgroundColor = 'transparent';
+
+      let ctx = canvas.getContext('2d');
+      let w = canvas.width;
+      let h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      if (calibratedLines) {
+        let visibleLines = calibratedLines;
+        if (extent) {
+          visibleLines = calibratedLines.filter(l => l.wavelength >= extent[0] && l.wavelength <= extent[1]);
+        }
+        if (visibleLines.length === 0) return;
+
+        let step = w / visibleLines.length;
+        let uvRegions = [];
+        let irRegions = [];
+        let currentRegion = null;
+
+        visibleLines.forEach((line, i) => {
+          let x = i * step;
+          if (line.wavelength < 380) {
+            ctx.fillStyle = "white";
+            ctx.fillRect(x, 0, step + 1, h);
+            if (!currentRegion || currentRegion.type !== 'UV') {
+              currentRegion = { type: 'UV', startX: x };
+              uvRegions.push(currentRegion);
+            }
+            currentRegion.endX = x + step;
+          } else if (line.wavelength > 780) {
+            ctx.fillStyle = "white";
+            ctx.fillRect(x, 0, step + 1, h);
+            if (!currentRegion || currentRegion.type !== 'IR') {
+              currentRegion = { type: 'IR', startX: x };
+              irRegions.push(currentRegion);
+            }
+            currentRegion.endX = x + step;
+          } else {
+            currentRegion = { type: 'Visible' };
+            let baseColor = wavelengthToRGB(line.wavelength);
+            let intensity = line.average / 255;
+            ctx.fillStyle = `rgb(${Math.round(baseColor.r * intensity)},${Math.round(baseColor.g * intensity)},${Math.round(baseColor.b * intensity)})`;
+            ctx.fillRect(x, 0, step + 1, h);
+          }
+        });
+
+        // Draw labels and dotted borders for UV/IR regions
+        ctx.strokeStyle = "#888";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "9px sans-serif";
+
+        [...uvRegions, ...irRegions].forEach(region => {
+          let rw = region.endX - region.startX;
+          if (rw > 3) {
+            ctx.beginPath();
+            ctx.rect(region.startX + 0.5, 0.5, rw - 1, h - 1);
+            ctx.stroke();
+            if (rw > 18) {
+              ctx.fillStyle = "#666";
+              ctx.fillText(region.type, region.startX + rw / 2, h / 2 + 1);
+            }
+          }
+        });
+        ctx.setLineDash([]); // Reset dash
+        return;
+      }
+
+      if (!pixels || pixels.length === 0) return;
+
+      let startIdx = 0;
+      let endIdx = pixels.length - 1;
+
+      if (extent) {
+        startIdx = Math.max(0, Math.floor(extent[0]));
+        endIdx = Math.min(pixels.length - 1, Math.ceil(extent[1]));
+      }
+
+      let visibleCount = endIdx - startIdx + 1;
+      let step = w / visibleCount;
+
+      for (let i = 0; i < visibleCount; i++) {
+        let p = pixels[startIdx + i];
+        ctx.fillStyle = `rgb(${Math.round(p.r)},${Math.round(p.g)},${Math.round(p.b)})`;
+        ctx.fillRect(i * step, 0, step + 1, h);
+      }
+    }
+
+    function syncColorBar(graph, canvasId, pixels, calibratedLines) {
+      if (!graph || !graph.chart) return;
+
+      let update = function() {
+        let extent = graph.chart.xAxis.scale().domain();
+        updateColorBar(canvasId, pixels, extent, calibratedLines);
+      };
+
+      // NVD3 doesn't have a direct 'zoom' or 'brush' event on the chart object itself
+      // that we can easily hook into for both main and focus charts.
+      // But we can hook into the dispatch of the brush.
+      if (graph.chart.focus && graph.chart.focus.brush) {
+        graph.chart.focus.dispatch.on('brush', update);
+      }
+
+      // Also update when the chart is rendered/updated
+      graph.chart.dispatch.on('renderEnd', update);
+      update();
+    }
+
     window.initializeFinalPlot = function(pixels) {
       window.targetPixels = pixels;
       var spectrum = createRGBSpectrum(pixels);
@@ -517,11 +744,19 @@
       var graphContainer = $('#graph1');
       graphContainer.empty();
       finalGraph = new SpectralWorkbench.Graph({ selector: '#graph1' });
+
+      // Adjust margins for labels
+      finalGraph.chart.margin({ top: 30, right: 20, bottom: 50, left: 60 });
+      finalGraph.chart.xAxis.axisLabel("Distance along line (pixels)");
+
       finalGraph.load(spectrum);
 
       // Ensure graph is correctly sized after potential layout transitions
       setTimeout(function() {
-        if (finalGraph) finalGraph.updateSize()();
+        if (finalGraph) {
+           finalGraph.updateSize()();
+           syncColorBar(finalGraph, 'plotting-color-bar', pixels);
+        }
       }, 300);
 
       // Export CSV
@@ -672,6 +907,12 @@
           line.style('display', 'none');
           handleA.style('display', 'none');
           handleB.style('display', 'none');
+        },
+        getPoints: function() { return points; },
+        setPoints: function(a, b) {
+          points.a = a;
+          points.b = b;
+          updateUI();
         }
       };
     }
@@ -766,16 +1007,26 @@
       reader.readAsDataURL(file);
     });
 
+    let currentCalibPixels = null;
     function extractCalibrationSpectrum(pixels) {
+      currentCalibPixels = pixels;
       let spectrum = createRGBSpectrum(pixels);
       $('#calibGraphSection').show();
       $('#calibGraph').empty();
 
       calibGraph = new SpectralWorkbench.Graph({ selector: '#calibGraph' });
+
+      // Adjust margins for labels
+      calibGraph.chart.margin({ top: 30, right: 20, bottom: 50, left: 60 });
+      calibGraph.chart.xAxis.axisLabel("Distance along line (pixels)");
+
       calibGraph.load(spectrum);
 
       setTimeout(() => {
-        if (calibGraph) calibGraph.updateSize()();
+        if (calibGraph) {
+          calibGraph.updateSize()();
+          syncColorBar(calibGraph, 'calib-color-bar', pixels);
+        }
 
         // Add click listener to graph for point selection
         d3.select('#calibGraph svg').on('click', function() {
@@ -859,6 +1110,66 @@
       }
     }
 
+    $('#btn-rough-calib').click(() => {
+      if (uploadPixels) {
+        extractCalibrationSpectrum(uploadPixels);
+        // Reset calibration points since the spectrum changed
+        window.calibVars.p1.x = null;
+        window.calibVars.p2.x = null;
+        $('#p1-pixel').text('-');
+        $('#p2-pixel').text('-');
+        $('#btn-apply-calibration').prop('disabled', true);
+      } else {
+        alert("No sampling data available from the plotting step. Please set points on an image first.");
+      }
+    });
+
+    function flipDirection(pixels, callback) {
+      if (!pixels) return;
+      pixels.reverse();
+      callback(pixels);
+    }
+
+    $('#btn-flip-plotting').click(() => {
+      flipDirection(uploadPixels, (reversed) => {
+        uploadPixels = reversed;
+        // Swap endpoints in draggable UI as well
+        if (uploadDraggable) {
+          let pts = uploadDraggable.getPoints();
+          if (pts.a && pts.b) {
+            let tmp = pts.a;
+            pts.a = pts.b;
+            pts.b = tmp;
+            uploadDraggable.setPoints(pts.a, pts.b);
+          }
+        }
+        initializeFinalPlot(uploadPixels);
+      });
+    });
+
+    $('#btn-flip-calib').click(() => {
+      flipDirection(currentCalibPixels, (reversed) => {
+        currentCalibPixels = reversed;
+        // Swap endpoints in draggable UI as well
+        if (calibDraggable) {
+          let pts = calibDraggable.getPoints();
+          if (pts.a && pts.b) {
+            let tmp = pts.a;
+            pts.a = pts.b;
+            pts.b = tmp;
+            calibDraggable.setPoints(pts.a, pts.b);
+          }
+        }
+        extractCalibrationSpectrum(currentCalibPixels);
+        // Reset calibration points since the indices changed
+        window.calibVars.p1.x = null;
+        window.calibVars.p2.x = null;
+        $('#p1-pixel').text('-');
+        $('#p2-pixel').text('-');
+        $('#btn-apply-calibration').prop('disabled', true);
+      });
+    });
+
     $('#btn-apply-calibration').click(() => {
       if (window.targetPixels && window.calibVars.p1.x !== null && window.calibVars.p2.x !== null && !isNaN(window.calibVars.p1.nm) && !isNaN(window.calibVars.p2.nm)) {
         // Use normalized coordinates (0.0 to 1.0) to avoid resolution mismatch
@@ -882,7 +1193,7 @@
       }
     });
 
-    function applyCalibrationToTarget(m, c) {
+    window.applyCalibrationToTarget = function(m, c) {
       let targetWidth = window.targetPixels.length;
       let lines = window.targetPixels.map((pixel, idx) => {
         let normalizedX = idx / (targetWidth - 1);
@@ -896,17 +1207,25 @@
       });
 
       let spectrum = new SpectralWorkbench.Spectrum({ data: { lines: lines } });
+      // Ensure the spectrum is recognized as calibrated by SpectralWorkbench
+      spectrum.json = { data: { lines: lines } };
       $('#graph-final').empty();
       calibratedGraph = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
+
+      // Adjust margins for labels
+      calibratedGraph.chart.margin({ top: 30, right: 20, bottom: 50, left: 60 });
+      calibratedGraph.chart.xAxis.axisLabel("Wavelength (nm)");
+
       calibratedGraph.load(spectrum);
 
       setTimeout(() => {
         if (calibratedGraph) {
           calibratedGraph.updateSize()();
           // Ensure x-axis shows nanometers and has proper formatting
-          calibratedGraph.chart.xAxis.axisLabel('Wavelength (nanometers)')
+          calibratedGraph.chart.xAxis
             .tickFormat(d3.format('.1f'));
           calibratedGraph.refresh();
+          syncColorBar(calibratedGraph, 'final-color-bar', null, lines);
         }
       }, 500);
 
