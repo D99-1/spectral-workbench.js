@@ -599,6 +599,15 @@
     function updateColorBar(canvasId, pixels, extent, calibratedLines) {
       let canvas = document.getElementById(canvasId);
       if (!canvas) return;
+
+      // Ensure canvas resolution matches display size to prevent stretching
+      let displayWidth = canvas.clientWidth;
+      let displayHeight = canvas.clientHeight || 15;
+      if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+      }
+
       let container = canvas.parentNode;
       let label = container.querySelector('.color-bar-label');
       if (!label) {
@@ -655,22 +664,22 @@
         });
 
         // Draw labels and dotted borders for UV/IR regions
-        ctx.strokeStyle = "#666";
+        ctx.strokeStyle = "#888";
         ctx.lineWidth = 1;
-        ctx.setLineDash([2, 2]);
+        ctx.setLineDash([3, 3]);
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.font = "bold 10px Arial";
+        ctx.font = "9px sans-serif";
 
         [...uvRegions, ...irRegions].forEach(region => {
           let rw = region.endX - region.startX;
-          if (rw > 5) {
+          if (rw > 3) {
             ctx.beginPath();
             ctx.rect(region.startX + 0.5, 0.5, rw - 1, h - 1);
             ctx.stroke();
-            if (rw > 20) {
-              ctx.fillStyle = "#333";
-              ctx.fillText(region.type, region.startX + rw / 2, h / 2);
+            if (rw > 18) {
+              ctx.fillStyle = "#666";
+              ctx.fillText(region.type, region.startX + rw / 2, h / 2 + 1);
             }
           }
         });
