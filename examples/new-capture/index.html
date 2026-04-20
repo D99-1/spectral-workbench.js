@@ -147,6 +147,23 @@
       width: 100%;
       height: 100%;
     }
+    .color-bar-label {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      pointer-events: none;
+      color: #333;
+      font-size: 10px;
+    }
+    .dotted-border {
+      border: 1px dotted #666;
+    }
   </style>
 
   <!--[if lt IE 9]>
@@ -525,13 +542,112 @@
     window.calibratedGraph = null;
     window.targetPixels = null;
 
-    function updateColorBar(canvasId, pixels, extent) {
+    function wavelengthToRGB(wavelength) {
+      let r, g, b, factor;
+      if (wavelength >= 380 && wavelength < 440) {
+        r = -(wavelength - 440) / (440 - 380);
+        g = 0.0;
+        b = 1.0;
+      } else if (wavelength >= 440 && wavelength < 490) {
+        r = 0.0;
+        g = (wavelength - 440) / (490 - 440);
+        b = 1.0;
+      } else if (wavelength >= 490 && wavelength < 510) {
+        r = 0.0;
+        g = 1.0;
+        b = -(wavelength - 510) / (510 - 490);
+      } else if (wavelength >= 510 && wavelength < 580) {
+        r = (wavelength - 510) / (580 - 510);
+        g = 1.0;
+        b = 0.0;
+      } else if (wavelength >= 580 && wavelength < 645) {
+        r = 1.0;
+        g = -(wavelength - 645) / (645 - 580);
+        b = 0.0;
+      } else if (wavelength >= 645 && wavelength <= 780) {
+        r = 1.0;
+        g = 0.0;
+        b = 0.0;
+      } else {
+        r = 0.0;
+        g = 0.0;
+        b = 0.0;
+      }
+
+      // Intensity factor for fading at edges
+      if (wavelength >= 380 && wavelength < 420) {
+        factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380);
+      } else if (wavelength >= 420 && wavelength <= 700) {
+        factor = 1.0;
+      } else if (wavelength > 700 && wavelength <= 780) {
+        factor = 0.3 + 0.7 * (780 - wavelength) / (780 - 700);
+      } else {
+        factor = 0.0;
+      }
+
+      const gamma = 0.8;
+      const intensityMax = 255;
+      const adjust = (c, f) => Math.round(intensityMax * Math.pow(c * f, gamma));
+
+      return {
+        r: adjust(r, factor),
+        g: adjust(g, factor),
+        b: adjust(b, factor)
+      };
+    }
+
+    function updateColorBar(canvasId, pixels, extent, calibratedLines) {
       let canvas = document.getElementById(canvasId);
       if (!canvas) return;
+      let container = canvas.parentNode;
+      let label = container.querySelector('.color-bar-label');
+      if (!label) {
+        label = document.createElement('div');
+        label.className = 'color-bar-label';
+        container.appendChild(label);
+      }
+      label.innerText = "";
+      container.classList.remove('dotted-border');
+      container.style.backgroundColor = 'transparent';
+
       let ctx = canvas.getContext('2d');
       let w = canvas.width;
       let h = canvas.height;
       ctx.clearRect(0, 0, w, h);
+
+      if (calibratedLines) {
+        let startW = extent ? extent[0] : calibratedLines[0].wavelength;
+        let endW = extent ? extent[1] : calibratedLines[calibratedLines.length - 1].wavelength;
+
+        // Check for UV/IR ranges
+        let avgW = (startW + endW) / 2;
+        if (avgW < 380) {
+          label.innerText = "UV";
+          container.classList.add('dotted-border');
+          container.style.backgroundColor = 'white';
+          return;
+        } else if (avgW > 780) {
+          label.innerText = "IR";
+          container.classList.add('dotted-border');
+          container.style.backgroundColor = 'white';
+          return;
+        }
+
+        let visibleLines = calibratedLines;
+        if (extent) {
+          visibleLines = calibratedLines.filter(l => l.wavelength >= extent[0] && l.wavelength <= extent[1]);
+        }
+        if (visibleLines.length === 0) return;
+
+        let step = w / visibleLines.length;
+        visibleLines.forEach((line, i) => {
+          let baseColor = wavelengthToRGB(line.wavelength);
+          let intensity = line.average / 255;
+          ctx.fillStyle = `rgb(${Math.round(baseColor.r * intensity)},${Math.round(baseColor.g * intensity)},${Math.round(baseColor.b * intensity)})`;
+          ctx.fillRect(i * step, 0, step + 1, h);
+        });
+        return;
+      }
 
       if (!pixels || pixels.length === 0) return;
 
@@ -553,12 +669,12 @@
       }
     }
 
-    function syncColorBar(graph, canvasId, pixels) {
+    function syncColorBar(graph, canvasId, pixels, calibratedLines) {
       if (!graph || !graph.chart) return;
 
       let update = function() {
         let extent = graph.chart.xAxis.scale().domain();
-        updateColorBar(canvasId, pixels, extent);
+        updateColorBar(canvasId, pixels, extent, calibratedLines);
       };
 
       // NVD3 doesn't have a direct 'zoom' or 'brush' event on the chart object itself
@@ -743,6 +859,12 @@
           line.style('display', 'none');
           handleA.style('display', 'none');
           handleB.style('display', 'none');
+        },
+        getPoints: function() { return points; },
+        setPoints: function(a, b) {
+          points.a = a;
+          points.b = b;
+          updateUI();
         }
       };
     }
@@ -949,6 +1071,16 @@
     $('#btn-flip-plotting').click(() => {
       flipDirection(uploadPixels, (reversed) => {
         uploadPixels = reversed;
+        // Swap endpoints in draggable UI as well
+        if (uploadDraggable) {
+          let pts = uploadDraggable.getPoints();
+          if (pts.a && pts.b) {
+            let tmp = pts.a;
+            pts.a = pts.b;
+            pts.b = tmp;
+            uploadDraggable.setPoints(pts.a, pts.b);
+          }
+        }
         initializeFinalPlot(uploadPixels);
       });
     });
@@ -956,6 +1088,16 @@
     $('#btn-flip-calib').click(() => {
       flipDirection(currentCalibPixels, (reversed) => {
         currentCalibPixels = reversed;
+        // Swap endpoints in draggable UI as well
+        if (calibDraggable) {
+          let pts = calibDraggable.getPoints();
+          if (pts.a && pts.b) {
+            let tmp = pts.a;
+            pts.a = pts.b;
+            pts.b = tmp;
+            calibDraggable.setPoints(pts.a, pts.b);
+          }
+        }
         extractCalibrationSpectrum(currentCalibPixels);
         // Reset calibration points since the indices changed
         window.calibVars.p1.x = null;
@@ -1019,7 +1161,7 @@
           calibratedGraph.chart.xAxis
             .tickFormat(d3.format('.1f'));
           calibratedGraph.refresh();
-          syncColorBar(calibratedGraph, 'final-color-bar', window.targetPixels);
+          syncColorBar(calibratedGraph, 'final-color-bar', null, lines);
         }
       }, 500);
 
