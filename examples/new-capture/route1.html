@@ -63,21 +63,15 @@
         </button>
       </div>
       <div class="line"></div>
-      <div class="step" data-target="#plotting">
-        <button type="button" class="step-trigger" role="tab" aria-controls="plotting" id="plot-trigger">
-          <span class="bs-stepper-label">3. Plotting</span>
-        </button>
-      </div>
-      <div class="line"></div>
       <div class="step" data-target="#calibration">
         <button type="button" class="step-trigger" role="tab" aria-controls="calibration" id="calibration-trigger">
-          <span class="bs-stepper-label">4. Calibration</span>
+          <span class="bs-stepper-label">3. Calibration</span>
         </button>
       </div>
       <div class="line"></div>
       <div class="step" data-target="#final-results">
         <button type="button" class="step-trigger" role="tab" aria-controls="final-results" id="final-results-trigger">
-          <span class="bs-stepper-label">5. Results</span>
+          <span class="bs-stepper-label">4. Results</span>
         </button>
       </div>
     </div>
@@ -116,8 +110,8 @@
               </div>
             </div>
             <div class="nav-buttons">
-              <button class="btn btn-default prev-step">Back</button>
-              <button class="btn btn-primary" id="processUploadedBtn" disabled>Next: Extract & Plot</button>
+              <button class="btn btn-default prev-step">Return to previous step</button>
+              <button class="btn btn-primary" id="processUploadedBtn" disabled>Next: Calibrate Peaks</button>
             </div>
           </div>
 
@@ -150,29 +144,12 @@
             </div>
 
             <div class="nav-buttons">
-              <button class="btn btn-default prev-step">Back</button>
+              <button class="btn btn-default prev-step">Return to previous step</button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Step 3: Plotting -->
-      <div id="plotting" class="content center-content" role="tabpanel">
-        <div class="step-content">
-          <h3>Extracted Spectrum</h3>
-          <div class="swb-graphing center-content" style="width: 100%;">
-            <div class="color-bar-container" id="plotting-color-bar-container">
-              <canvas id="plotting-color-bar" class="color-bar-canvas"></canvas>
-            </div>
-            <div id="graph1"></div>
-          </div>
-          <div class="nav-buttons text-center">
-            <button class="btn btn-default prev-step">Back</button>
-            <button class="btn btn-info" id="btn-flip-plotting"><i class="fa fa-refresh"></i> Flip Horizontally</button>
-            <button class="btn btn-primary" id="btn-to-calibration">Next: Calibrate Peaks</button>
-          </div>
-        </div>
-      </div>
 
       <!-- Step 4: Calibration (Rough) -->
       <div id="calibration" class="content center-content" role="tabpanel">
@@ -204,7 +181,7 @@
             </div>
 
             <div class="nav-buttons text-center">
-              <button class="btn btn-default prev-step">Back</button>
+              <button class="btn btn-default prev-step">Return to previous step</button>
               <button class="btn btn-info" id="btn-flip-calib"><i class="fa fa-refresh"></i> Flip Horizontally</button>
               <button class="btn btn-success" id="btn-apply-calibration" disabled>Apply Calibration</button>
             </div>
@@ -223,7 +200,7 @@
             <div id="graph-final" style="height: 400px; width: 100%;"></div>
           </div>
           <div class="nav-buttons text-center">
-            <button class="btn btn-default prev-step">Back</button>
+            <button class="btn btn-default prev-step">Return to previous step</button>
             <button class="btn btn-default" id="btn-export-final-csv"><i class="fa fa-download"></i> Export CSV</button>
             <a href="index.html" class="btn btn-primary">Start Over</a>
           </div>
@@ -412,19 +389,9 @@
         setTimeout(() => { if (finalGraph) { finalGraph.updateSize()(); syncColorBar(finalGraph, 'plotting-color-bar', pixels); } }, 300);
       }
 
-      $('#processUploadedBtn').click(() => {
-        stepper.to(3); initializePlot(uploadPixels);
-      });
-
-      $('#capture-page-next').click(() => {
-        $W.saveSpectrum();
-        let rowData = $W.full_data;
-        let pixels = rowData.map(p => (Array.isArray(p) ? { r: p[0], g: p[1], b: p[2] } : typeof p === 'object' ? p : { r: p, g: p, b: p }));
-        stepper.to(3); initializePlot(pixels);
-      });
-
-      $('#btn-to-calibration').click(() => {
-        stepper.to(4);
+      function goToCalibration(pixels) {
+        targetPixels = pixels;
+        stepper.to(3);
         $('#calibGraph').empty();
         calibGraph = new SpectralWorkbench.Graph({ selector: '#calibGraph' });
         calibGraph.chart.margin({ top: 30, right: 20, bottom: 50, left: 60 });
@@ -444,6 +411,17 @@
             checkCalibReady(); renderMarkers();
           });
         }, 500);
+      }
+
+      $('#processUploadedBtn').click(() => {
+        goToCalibration(uploadPixels);
+      });
+
+      $('#capture-page-next').click(() => {
+        $W.saveSpectrum();
+        let rowData = $W.full_data;
+        let pixels = rowData.map(p => (Array.isArray(p) ? { r: p[0], g: p[1], b: p[2] } : typeof p === 'object' ? p : { r: p, g: p, b: p }));
+        goToCalibration(pixels);
       });
 
       function checkCalibReady() {
@@ -472,7 +450,7 @@
           wavelength: +(m * (idx / (width - 1)) + c).toFixed(2),
           r: p.r, g: p.g, b: p.b, average: (p.r + p.g + p.b) / 3
         }));
-        stepper.to(5);
+        stepper.to(4);
         $('#graph-final').empty();
         calibratedGraph = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
         calibratedGraph.chart.xAxis.axisLabel("Wavelength (nm)");
@@ -481,8 +459,7 @@
         calibratedGraph.datum.downloadCSV('#btn-export-final-csv');
       });
 
-      $('#btn-flip-plotting').click(() => { targetPixels.reverse(); initializePlot(targetPixels); });
-      $('#btn-flip-calib').click(() => { targetPixels.reverse(); $('#btn-to-calibration').click(); });
+      $('#btn-flip-calib').click(() => { targetPixels.reverse(); goToCalibration(targetPixels); });
     });
   </script>
 </body>
