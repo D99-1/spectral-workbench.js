@@ -96,8 +96,10 @@
         <div class="step-content text-center">
           <h3>Set Endpoints on Full Spectrum Image</h3>
           <p>Click twice on the image to define the sampling row endpoints. Then click a third time to define a reference point. This sampling line will be used for all following images.</p>
-          <div class="upload-preview-area" style="display:inline-block; position:relative;">
-            <canvas id="fullMainCanvas" class="upload-preview-canvas"></canvas>
+          <div class="upload-preview-area">
+            <div style="position:relative; display:inline-block;">
+              <canvas id="fullMainCanvas" class="upload-preview-canvas"></canvas>
+            </div>
           </div>
           <div id="endpoints-display"></div>
           <div class="nav-buttons">
@@ -114,8 +116,10 @@
           <p>The sampling line is locked to the same coordinates defined in the previous step.</p>
 
           <div style="margin-bottom: 20px;">
-            <div class="upload-preview-area" style="display:inline-block; position:relative;">
-              <canvas id="calibLineCanvas" class="upload-preview-canvas"></canvas>
+            <div class="upload-preview-area">
+              <div style="position:relative; display:inline-block;">
+                <canvas id="calibLineCanvas" class="upload-preview-canvas"></canvas>
+              </div>
             </div>
             <div class="error-msg" id="calib-error">all endpoints must be within the image</div>
             <br>
@@ -142,8 +146,10 @@
           <p>Move the blue reference point if needed to align the sampling row with your sample.</p>
 
           <div style="margin-bottom: 20px;">
-            <div class="upload-preview-area" style="display:inline-block; position:relative;">
-              <canvas id="sampleAdjCanvas" class="upload-preview-canvas"></canvas>
+            <div class="upload-preview-area">
+              <div style="position:relative; display:inline-block;">
+                <canvas id="sampleAdjCanvas" class="upload-preview-canvas"></canvas>
+              </div>
             </div>
             <div class="error-msg" id="sample-error">all endpoints must be within the image</div>
             <br>
@@ -313,12 +319,14 @@
         });
       }
 
-      function setupDraggableLine3Point(canvas, img, onUpdate, relativeOnly, errorId) {
+      function setupDraggableLine3Point(canvas, img, onUpdate, relativeMode, errorId) {
         let container = d3.select(canvas.parentNode);
         container.selectAll('.svg-overlay').remove();
-        let svg = container.append('svg').attr('class', 'svg-overlay').style({width: canvas.width + 'px', height: canvas.height + 'px'});
+        let svg = container.append('svg').attr('class', 'svg-overlay')
+            .style('width', canvas.width + 'px')
+            .style('height', canvas.height + 'px');
 
-        let line = svg.append('line').attr({stroke: '#ffcc00', 'stroke-width': 2}).style('display', 'none');
+        let line = svg.append('line').attr('stroke', '#ffcc00').attr('stroke-width', 2).style('display', 'none');
         let handleA = svg.append('circle').attr({r: 6, fill: '#ffcc00', stroke: '#ffaa33'}).style('display', 'none');
         let handleB = svg.append('circle').attr({r: 6, fill: '#ffcc00', stroke: '#ffaa33'}).style('display', 'none');
 
@@ -346,25 +354,33 @@
 
         let drag = d3.behavior.drag().on('drag', function() {
           let node = d3.select(this).node();
-          if (node === handleRef.node()) {
-            let dx = d3.event.x - endpoints.ref.x, dy = d3.event.y - endpoints.ref.y;
-            endpoints.ref.x = d3.event.x; endpoints.ref.y = d3.event.y;
+          if (relativeMode) {
+            // Relative movement: drag ANY point to move the entire set
+            let dx = d3.event.dx, dy = d3.event.dy;
             if (endpoints.a) { endpoints.a.x += dx; endpoints.a.y += dy; }
             if (endpoints.b) { endpoints.b.x += dx; endpoints.b.y += dy; }
-          } else if (!relativeOnly) {
-            if (node === handleA.node()) { endpoints.a.x = d3.event.x; endpoints.a.y = d3.event.y; }
-            else if (node === handleB.node()) { endpoints.b.x = d3.event.x; endpoints.b.y = d3.event.y; }
+            if (endpoints.ref) { endpoints.ref.x += dx; endpoints.ref.y += dy; }
+          } else {
+            // Definition phase: move points independently
+            if (node === handleRef.node()) {
+              endpoints.ref.x = d3.event.x; endpoints.ref.y = d3.event.y;
+            } else if (node === handleA.node()) {
+              endpoints.a.x = d3.event.x; endpoints.a.y = d3.event.y;
+            } else if (node === handleB.node()) {
+              endpoints.b.x = d3.event.x; endpoints.b.y = d3.event.y;
+            }
           }
           updateUI();
         });
 
         handleRef.call(drag);
-        if (!relativeOnly) { handleA.call(drag); handleB.call(drag); }
+        handleA.call(drag);
+        handleB.call(drag);
 
-        $(canvas).off('click').on('click', function(event) {
-          if (relativeOnly || (endpoints.a && endpoints.b && endpoints.ref)) return;
-          let rect = canvas.getBoundingClientRect();
-          let p = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        svg.on('click', function() {
+          if (relativeMode || (endpoints.a && endpoints.b && endpoints.ref)) return;
+          let m = d3.mouse(this);
+          let p = { x: m[0], y: m[1] };
           if (!endpoints.a) endpoints.a = p;
           else if (!endpoints.b) endpoints.b = p;
           else if (!endpoints.ref) endpoints.ref = p;
