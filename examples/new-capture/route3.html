@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Route 3 - SpectralWorkbench</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bs-stepper/dist/css/bs-stepper.min.css">
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bs-stepper/dist/js/bs-stepper.min.js"></script>
+  <script src="https://d3js.org/d3.v3.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.6/nv.d3.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+
+  <!-- Local scripts -->
+  <script src="../capture/graph.js" type="text/javascript"></script>
+  <script src="../../dist/spectral-workbench.js" type="text/javascript"></script>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.6/nv.d3.min.css" rel="stylesheet">
+  <link href="../../dist/spectral-workbench.css" rel="stylesheet">
+  <link href="new-capture.css" media="all" rel="stylesheet" type="text/css" />
+
+  <style>
+    .upload-card { padding: 15px; margin: 20px 0; }
+    .upload-preview-area { background: #f0f0f0; border: 1px dashed #ccc; border-radius: 6px; padding: 10px; margin-top: 10px; text-align: center; }
+    .upload-preview-canvas { max-width: 100%; border-radius: 4px; cursor: crosshair; }
+    .svg-overlay { position: absolute; top: 0; left: 0; pointer-events: none; }
+    .svg-overlay circle { pointer-events: all; cursor: move; }
+    .color-bar-container { width: 100%; height: 15px; margin-bottom: 5px; border: 1px solid #ccc; overflow: hidden; position: relative; }
+    .color-bar-canvas { width: 100%; height: 100%; }
+    .step-content { padding: 20px; }
+    .nav-buttons { margin-top: 20px; text-align: center; }
+    .image-row { display: flex; justify-content: space-around; margin: 20px 0; }
+    .image-preview-small { text-align: center; width: 30%; }
+    .image-preview-small canvas { width: 100%; border: 1px solid #ddd; }
+    .calib-marker { stroke: red; stroke-width: 2px; }
+    .calib-marker-label { fill: red; font-size: 10px; font-weight: bold; }
+  </style>
+</head>
+
+<body class="full-stretch-block">
+  <div class="full-stretch-block bs-stepper">
+    <div class="bs-stepper-header" role="tablist">
+      <div class="step" data-target="#upload-step"><button type="button" class="step-trigger" role="tab"><span class="bs-stepper-label">1. Upload All</span></button></div>
+      <div class="line"></div>
+      <div class="step" data-target="#full-spectrum-step"><button type="button" class="step-trigger" role="tab"><span class="bs-stepper-label">2. Set Endpoints</span></button></div>
+      <div class="line"></div>
+      <div class="step" data-target="#calibration-step"><button type="button" class="step-trigger" role="tab"><span class="bs-stepper-label">3. Calibrate Peaks</span></button></div>
+      <div class="line"></div>
+      <div class="step" data-target="#final-results"><button type="button" class="step-trigger" role="tab"><span class="bs-stepper-label">4. Results</span></button></div>
+    </div>
+
+    <div class="capture full-stretch-block bs-stepper-content" id="main-content">
+
+      <!-- Step 1: Upload All -->
+      <div id="upload-step" class="content" role="tabpanel">
+        <div class="step-content text-center">
+          <h2>Upload Three Images</h2>
+          <p>Please upload the sample, calibration, and full spectrum images. They must all have the same pixel dimensions.</p>
+          <div class="row" style="margin-top: 30px;">
+            <div class="col-md-4">
+              <h4>1. Sample Image</h4>
+              <input type="file" id="sampleInput" accept="image/*" class="form-control">
+            </div>
+            <div class="col-md-4">
+              <h4>2. Calibration Image</h4>
+              <input type="file" id="calibInput" accept="image/*" class="form-control">
+            </div>
+            <div class="col-md-4">
+              <h4>3. Full Spectrum</h4>
+              <input type="file" id="fullInput" accept="image/*" class="form-control">
+            </div>
+          </div>
+          <div class="image-row" id="preview-row" style="display:none;">
+            <div class="image-preview-small"><h5>Sample</h5><canvas id="sampleSmall"></canvas></div>
+            <div class="image-preview-small"><h5>Calibration</h5><canvas id="calibSmall"></canvas></div>
+            <div class="image-preview-small"><h5>Full Spectrum</h5><canvas id="fullSmall"></canvas></div>
+          </div>
+          <div class="nav-buttons">
+            <a href="index.html" class="btn btn-default">Back to Home</a>
+            <button class="btn btn-primary" id="to-step-2" disabled>Next: Set Endpoints</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Set Endpoints on Full Spectrum -->
+      <div id="full-spectrum-step" class="content" role="tabpanel">
+        <div class="step-content text-center">
+          <h3>Set Endpoints on Full Spectrum Image</h3>
+          <p>Click twice on the image to define the sampling row endpoints. These will be used for all three images.</p>
+          <div class="upload-preview-area" style="display:inline-block; position:relative;">
+            <canvas id="fullMainCanvas" class="upload-preview-canvas"></canvas>
+          </div>
+          <div id="endpoints-display"></div>
+          <div class="nav-buttons">
+            <button class="btn btn-default prev-step">Back</button>
+            <button class="btn btn-primary" id="to-step-3" disabled>Next: Calibrate Peaks</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Calibrate Peaks -->
+      <div id="calibration-step" class="content" role="tabpanel">
+        <div class="step-content text-center">
+          <h3>Identify Peaks on Calibration Image</h3>
+          <p>The sampling line is locked to the same coordinates defined in the previous step.</p>
+
+          <div style="margin-bottom: 20px;">
+            <div class="upload-preview-area" style="display:inline-block; position:relative; pointer-events: none; opacity: 0.8;">
+              <canvas id="calibLineCanvas" class="upload-preview-canvas"></canvas>
+            </div>
+            <p class="small text-muted">Sampling line locked to Full Spectrum coordinates.</p>
+          </div>
+
+          <div class="color-bar-container"><canvas id="calib-color-bar" class="color-bar-canvas"></canvas></div>
+          <div id="calibGraph" style="height: 300px; width: 100%;"></div>
+          <div class="row" style="margin-top: 15px;">
+            <div class="col-md-6"><div class="input-group"><label class="input-group-addon">P1 (Pixel: <span id="p1-pixel">-</span>)</label><input type="number" id="p1-nm" class="form-control" placeholder="nm"></div></div>
+            <div class="col-md-6"><div class="input-group"><label class="input-group-addon">P2 (Pixel: <span id="p2-pixel">-</span>)</label><input type="number" id="p2-nm" class="form-control" placeholder="nm"></div></div>
+          </div>
+          <div class="nav-buttons">
+            <button class="btn btn-default prev-step">Back</button>
+            <button class="btn btn-success" id="btn-apply-calibration" disabled>Finalize Spectrum</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: Final Results -->
+      <div id="final-results" class="content" role="tabpanel">
+        <div class="step-content text-center">
+          <h3>Final Calibrated Spectrum (Sample Image)</h3>
+          <div class="color-bar-container"><canvas id="final-color-bar" class="color-bar-canvas"></canvas></div>
+          <div id="graph-final" style="height: 400px; width: 100%;"></div>
+          <div class="nav-buttons">
+            <button class="btn btn-default prev-step">Back</button>
+            <button class="btn btn-default" id="btn-export-csv"><i class="fa fa-download"></i> Export CSV</button>
+            <a href="index.html" class="btn btn-primary">Start Over</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    $(document).ready(function() {
+      var stepper = new Stepper($('.bs-stepper')[0], { linear: false });
+      var images = { sample: null, calib: null, full: null };
+      var endpoints = { a: null, b: null };
+      var samplePixels = null, calibPixels = null;
+      var calibVars = { p1: { x: null, nm: null }, p2: { x: null, nm: null } };
+      var calibGraph = null;
+
+      $('.prev-step').click(() => stepper.previous());
+
+      function handleFile(id, key) {
+        $(`#${id}`).change(e => {
+          let file = e.target.files[0]; if (!file) return;
+          let reader = new FileReader();
+          reader.onload = ev => {
+            let img = new Image();
+            img.onload = () => {
+              images[key] = img;
+              let c = document.getElementById(`${key}Small`);
+              c.width = 200; c.height = (200/img.width)*img.height;
+              c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+              checkAllUploaded();
+            };
+            img.src = ev.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+      handleFile('sampleInput', 'sample'); handleFile('calibInput', 'calib'); handleFile('fullInput', 'full');
+
+      function checkAllUploaded() {
+        if (images.sample && images.calib && images.full) {
+          if (images.sample.width !== images.calib.width || images.sample.width !== images.full.width ||
+              images.sample.height !== images.calib.height || images.sample.height !== images.full.height) {
+            alert("All images must be in the same pixel dimensions. This can be done by using the same camera for all images (which you should be doing anyway)");
+            return;
+          }
+          $('#preview-row').show(); $('#to-step-2').prop('disabled', false);
+        }
+      }
+
+      $('#to-step-2').click(() => {
+        stepper.to(2);
+        let c = document.getElementById('fullMainCanvas');
+        c.width = 800; c.height = (800/images.full.width)*images.full.height;
+        c.getContext('2d').drawImage(images.full, 0, 0, c.width, c.height);
+
+        setupDraggableLine(c, images.full, (pixels, pts) => {
+          endpoints = pts;
+          $('#to-step-3').prop('disabled', false);
+          $('#endpoints-display').text(`Endpoints set: (${Math.round(pts.a.x)}, ${Math.round(pts.a.y)}) to (${Math.round(pts.b.x)}, ${Math.round(pts.b.y)})`);
+        });
+      });
+
+      function setupDraggableLine(canvas, img, onUpdate) {
+        let points = { a: null, b: null };
+        let container = d3.select(canvas.parentNode);
+        container.selectAll('.svg-overlay').remove();
+        let svg = container.append('svg').attr('class', 'svg-overlay').style({width: canvas.width + 'px', height: canvas.height + 'px'});
+        let line = svg.append('line').attr({stroke: '#ffcc00', 'stroke-width': 2}).style('display', 'none');
+        let handleA = svg.append('circle').attr({r: 6, fill: '#ffcc00', stroke: '#ffaa33'}).style('display', 'none');
+        let handleB = svg.append('circle').attr({r: 6, fill: '#ffcc00', stroke: '#ffaa33'}).style('display', 'none');
+
+        function updateUI() {
+          if (points.a) handleA.attr({cx: points.a.x, cy: points.a.y}).style('display', 'block');
+          if (points.b) {
+            handleB.attr({cx: points.b.x, cy: points.b.y}).style('display', 'block');
+            line.attr({x1: points.a.x, y1: points.a.y, x2: points.b.x, y2: points.b.y}).style('display', 'block');
+            onUpdate(null, points);
+          }
+        }
+        let drag = d3.behavior.drag().on('drag', function() {
+          let isA = d3.select(this).node() === handleA.node();
+          let t = isA ? points.a : points.b;
+          t.x = Math.max(0, Math.min(canvas.width, d3.event.x)); t.y = Math.max(0, Math.min(canvas.height, d3.event.y));
+          updateUI();
+        });
+        handleA.call(drag); handleB.call(drag);
+        $(canvas).click(e => {
+          if (points.a && points.b) return;
+          let r = canvas.getBoundingClientRect();
+          let p = { x: e.clientX - r.left, y: e.clientY - r.top };
+          if (!points.a) points.a = p; else points.b = p;
+          updateUI();
+        });
+      }
+
+      function extractPixels(img, pts, canvasWidth, canvasHeight) {
+        let off = document.createElement('canvas'); off.width = img.width; off.height = img.height;
+        let ctx = off.getContext('2d'); ctx.drawImage(img, 0, 0);
+        let swbImg = new SpectralWorkbench.Image(null, { url: img.src }); swbImg.obj = img; swbImg.width = img.width; swbImg.height = img.height; swbImg.ctx = ctx;
+        let scaleX = img.width / canvasWidth, scaleY = img.height / canvasHeight;
+        let raw = swbImg.getLine(pts.a.x * scaleX, pts.a.y * scaleY, pts.b.x * scaleX, pts.b.y * scaleY);
+        return raw.map(p => ({ r: p[0], g: p[1], b: p[2] }));
+      }
+
+      $('#to-step-3').click(() => {
+        let cw = 800, ch = (800/images.full.width)*images.full.height;
+        samplePixels = extractPixels(images.sample, endpoints, cw, ch);
+        calibPixels = extractPixels(images.calib, endpoints, cw, ch);
+
+        stepper.to(3);
+
+        // Show locked line on calibration image
+        let lc = document.getElementById('calibLineCanvas');
+        lc.width = cw; lc.height = ch;
+        let lctx = lc.getContext('2d');
+        lctx.drawImage(images.calib, 0, 0, cw, ch);
+        lctx.strokeStyle = '#ffcc00'; lctx.lineWidth = 2;
+        lctx.beginPath();
+        lctx.moveTo(endpoints.a.x, endpoints.a.y);
+        lctx.lineTo(endpoints.b.x, endpoints.b.y);
+        lctx.stroke();
+
+        $('#calibGraph').empty();
+        calibGraph = new SpectralWorkbench.Graph({ selector: '#calibGraph' });
+        calibGraph.load(new SpectralWorkbench.Spectrum({ data: { lines: calibPixels.map((p,i)=>({pixel:i, r:p.r, g:p.g, b:p.b, average:(p.r+p.g+p.b)/3})) } }));
+        setTimeout(() => {
+          calibGraph.updateSize()();
+          d3.select('#calibGraph svg').on('click', function() {
+            let dataX = calibGraph.chart.xAxis.scale().invert(d3.mouse(d3.select('#calibGraph .nv-focus').node())[0]);
+            if (calibVars.p1.x === null || (calibVars.p1.x !== null && calibVars.p2.x !== null)) {
+              calibVars.p1.x = dataX; $('#p1-pixel').text(Math.round(dataX)); calibVars.p2.x = null; $('#p2-pixel').text('-');
+            } else { calibVars.p2.x = dataX; $('#p2-pixel').text(Math.round(dataX)); }
+            checkReady(); renderMarkers();
+          });
+        }, 500);
+      });
+
+      function checkReady() {
+        calibVars.p1.nm = parseFloat($('#p1-nm').val()); calibVars.p2.nm = parseFloat($('#p2-nm').val());
+        $('#btn-apply-calibration').prop('disabled', !(calibVars.p1.x !== null && calibVars.p2.x !== null && !isNaN(calibVars.p1.nm) && !isNaN(calibVars.p2.nm)));
+      }
+      $('#p1-nm, #p2-nm').on('input', checkReady);
+
+      function renderMarkers() {
+        let svg = d3.select('#calibGraph svg .nv-focus');
+        svg.selectAll('.calib-marker-group').remove();
+        let g = svg.append('g').attr('class', 'calib-marker-group');
+        [calibVars.p1, calibVars.p2].forEach((p, i) => {
+          if (p.x === null) return;
+          let x = calibGraph.chart.xAxis.scale()(p.x);
+          g.append('line').attr({ class: 'calib-marker', x1: x, x2: x, y1: 0, y2: calibGraph.height });
+          g.append('text').attr({ class: 'calib-marker-label', x: x, y: -5, 'text-anchor': 'middle' }).text('P' + (i + 1));
+        });
+      }
+
+      $('#btn-apply-calibration').click(() => {
+        let w = calibPixels.length;
+        let n1 = calibVars.p1.x / (w - 1), n2 = calibVars.p2.x / (w - 1);
+        let m = (calibVars.p2.nm - calibVars.p1.nm) / (n2 - n1), c = calibVars.p1.nm - m * n1;
+        let sw = samplePixels.length;
+        let lines = samplePixels.map((p, i) => ({
+          wavelength: +(m * (i / (sw - 1)) + c).toFixed(2),
+          r: p.r, g: p.g, b: p.b, average: (p.r + p.g + p.b) / 3
+        }));
+        stepper.to(4);
+        $('#graph-final').empty();
+        let g = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
+        g.load(new SpectralWorkbench.Spectrum({ data: { lines: lines } }));
+        setTimeout(() => g.updateSize()(), 500);
+        g.datum.downloadCSV('#btn-export-csv');
+      });
+    });
+  </script>
+</body>
+</html>
