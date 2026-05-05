@@ -28,7 +28,7 @@
     .upload-card { padding: 15px; margin: 20px 0; }
     .upload-preview-area { background: #f0f0f0; border: 1px dashed #ccc; border-radius: 6px; padding: 10px; margin-top: 10px; text-align: center; }
     .upload-preview-canvas { max-width: 100%; border-radius: 4px; cursor: crosshair; }
-    .svg-overlay { position: absolute; top: 0; left: 0; pointer-events: none; }
+    .svg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: all; }
     .svg-overlay circle, .svg-overlay g.handle { pointer-events: all; cursor: move; }
     .color-bar-container { width: 100%; height: 15px; margin-bottom: 5px; border: 1px solid #ccc; overflow: hidden; position: relative; }
     .color-bar-canvas { width: 100%; height: 100%; }
@@ -289,6 +289,7 @@
       }
 
       $('#to-step-2').click(() => {
+        endpoints = { a: null, b: null, ref: null };
         stepper.to(2);
         let c = document.getElementById('fullMainCanvas');
         c.width = 800; c.height = (800/images.full.width)*images.full.height;
@@ -323,8 +324,8 @@
         let container = d3.select(canvas.parentNode);
         container.selectAll('.svg-overlay').remove();
         let svg = container.append('svg').attr('class', 'svg-overlay')
-            .style('width', canvas.width + 'px')
-            .style('height', canvas.height + 'px');
+            .attr('viewBox', `0 0 ${canvas.width} ${canvas.height}`)
+            .attr('preserveAspectRatio', 'xMidYMid meet');
 
         let line = svg.append('line').attr('stroke', '#ffcc00').attr('stroke-width', 2).style('display', 'none');
         let handleA = svg.append('circle').attr({r: 6, fill: '#ffcc00', stroke: '#ffaa33'}).style('display', 'none');
@@ -378,12 +379,16 @@
         handleB.call(drag);
 
         svg.on('click', function() {
-          if (relativeMode || (endpoints.a && endpoints.b && endpoints.ref)) return;
+          if (relativeMode) return;
+          if (endpoints.a && endpoints.b && endpoints.ref) return;
+
           let m = d3.mouse(this);
           let p = { x: m[0], y: m[1] };
+
           if (!endpoints.a) endpoints.a = p;
           else if (!endpoints.b) endpoints.b = p;
           else if (!endpoints.ref) endpoints.ref = p;
+
           updateUI();
         });
 

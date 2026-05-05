@@ -32,7 +32,7 @@
     .upload-preview-area { background: #f0f0f0; border: 1px dashed #ccc; border-radius: 6px; padding: 10px; margin-top: 10px; text-align: center; max-height: 500px; overflow-y: auto; }
     .upload-preview-canvas { max-width: 100%; border-radius: 4px; cursor: crosshair; }
     .row-highlight { position: absolute; left: 0; right: 0; height: 2px; background: #ffcc00; box-shadow: 0 0 4px #ffaa33; pointer-events: none; }
-    .svg-overlay { position: absolute; top: 0; left: 0; pointer-events: none; }
+    .svg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: all; }
     .svg-overlay circle { pointer-events: all; cursor: move; }
     .btn-spectrum { background: #2c6e9e; border: none; color: white; margin-right: 8px; }
     .btn-spectrum:hover { background: #1e4a6e; color: white; }
@@ -281,7 +281,9 @@
       let points = { a: null, b: null };
       let container = d3.select(canvas.parentNode);
       container.selectAll('.svg-overlay').remove();
-      let svg = container.append('svg').attr('class', 'svg-overlay').style('width', canvas.width + 'px').style('height', canvas.height + 'px');
+      let svg = container.append('svg').attr('class', 'svg-overlay')
+          .attr('viewBox', `0 0 ${canvas.width} ${canvas.height}`)
+          .attr('preserveAspectRatio', 'xMidYMid meet');
       let line = svg.append('line').attr('stroke', '#ffcc00').attr('stroke-width', 2).style('display', 'none');
       let handleA = svg.append('circle').attr('r', 6).attr('fill', '#ffcc00').attr('stroke', '#ffaa33').style('display', 'none');
       let handleB = svg.append('circle').attr('r', 6).attr('fill', '#ffcc00').attr('stroke', '#ffaa33').style('display', 'none');
@@ -307,11 +309,10 @@
         updateUI();
       });
       handleA.call(drag); handleB.call(drag);
-      $(canvas).off('click').on('click', function(event) {
+      svg.on('click', function() {
         if (points.a && points.b) return;
-        let rect = canvas.getBoundingClientRect();
-        let x = event.clientX - rect.left, y = event.clientY - rect.top;
-        if (!points.a) points.a = { x: x, y: y }; else if (!points.b) points.b = { x: x, y: y };
+        let m = d3.mouse(this);
+        if (!points.a) points.a = { x: m[0], y: m[1] }; else if (!points.b) points.b = { x: m[0], y: m[1] };
         updateUI();
       });
     }
