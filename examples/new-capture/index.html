@@ -402,6 +402,7 @@
             <input type="file" id="calibImageUpload" accept="image/jpeg,image/png" style="display:none;">
             <button class="btn btn-spectrum" id="triggerCalibUploadBtn"><i class="fa fa-folder-open"></i> Choose Calibration Image</button>
             <button class="btn btn-info" id="btn-rough-calib" style="margin-left:10px;"><i class="fa fa-magic"></i> Rough Calibration</button>
+            <button class="btn btn-warning" id="btn-use-same-points" style="margin-left:10px; display:none;"><i class="fa fa-copy"></i> Use same points</button>
             <span id="calibFileName" style="margin-left:10px;"></span>
 
             <div id="calibPreviewContainer" class="upload-preview-area" style="display:none; position: relative;">
@@ -920,6 +921,9 @@
     // ----- Image Upload Module -----
     let currentImage = null;
     let uploadPixels = null;
+    let sampleImageRawWidth = null;
+    let sampleImageRawHeight = null;
+    let sampleRawPoints = { a: null, b: null };
     let previewCanvas = document.getElementById('uploadPreviewCanvas');
     let ctx = previewCanvas.getContext('2d');
     let uploadContainer = document.getElementById('uploadPreviewContainer');
@@ -938,6 +942,8 @@
         let img = new Image();
         img.onload = () => {
           currentImage = img;
+          sampleImageRawWidth = img.width;
+          sampleImageRawHeight = img.height;
           let displayWidth = Math.min(640, img.width);
           let displayHeight = (displayWidth / img.width) * img.height;
           previewCanvas.width = displayWidth;
@@ -950,6 +956,10 @@
           if (uploadDraggable) uploadDraggable.reset();
           uploadDraggable = setupDraggableLine(previewCanvas, img, (pixels, pts) => {
             uploadPixels = pixels;
+            let scaleX = img.width / previewCanvas.width;
+            let scaleY = img.height / previewCanvas.height;
+            sampleRawPoints.a = { x: pts.a.x * scaleX, y: pts.a.y * scaleY };
+            sampleRawPoints.b = { x: pts.b.x * scaleX, y: pts.b.y * scaleY };
             processBtn.disabled = false;
             $('#rowCoordDisplay').html(`<i class="fa fa-chart-line"></i> Line set between (${Math.round(pts.a.x)}, ${Math.round(pts.a.y)}) and (${Math.round(pts.b.x)}, ${Math.round(pts.b.y)}). Ready to extract.`);
           });
@@ -1001,6 +1011,12 @@
           calibDraggable = setupDraggableLine(calibPreviewCanvas, img, (pixels) => {
             extractCalibrationSpectrum(pixels);
           });
+
+          if (sampleImageRawWidth !== null) {
+            $('#btn-use-same-points').show();
+          } else {
+            $('#btn-use-same-points').hide();
+          }
         };
         img.src = ev.target.result;
       };
@@ -1109,6 +1125,20 @@
         $('#btn-apply-calibration').prop('disabled', true);
       }
     }
+
+    $('#btn-use-same-points').click(() => {
+      if (window.calibVars.calibImage && sampleImageRawWidth !== null && sampleRawPoints.a && sampleRawPoints.b) {
+        if (window.calibVars.calibImage.width !== sampleImageRawWidth || window.calibVars.calibImage.height !== sampleImageRawHeight) {
+          alert("Images are not the same size. Calibrating using the same point will not work");
+        } else {
+          let scaleX = calibPreviewCanvas.width / window.calibVars.calibImage.width;
+          let scaleY = calibPreviewCanvas.height / window.calibVars.calibImage.height;
+          let pA = { x: sampleRawPoints.a.x * scaleX, y: sampleRawPoints.a.y * scaleY };
+          let pB = { x: sampleRawPoints.b.x * scaleX, y: sampleRawPoints.b.y * scaleY };
+          calibDraggable.setPoints(pA, pB);
+        }
+      }
+    });
 
     $('#btn-rough-calib').click(() => {
       if (uploadPixels) {
