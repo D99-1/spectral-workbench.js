@@ -459,8 +459,13 @@
         setTimeout(() => {
           g.updateSize()();
           syncColorBar(g, 'final-color-bar', null, linesToUse);
-          if (isRelative) g.chart.yAxis.axisLabel("Intensity (%)");
-          else g.chart.yAxis.axisLabel("Intensity");
+          if (isRelative) {
+              g.chart.yAxis.axisLabel("Intensity (%)");
+              g.chart.yDomain([0, 100]);
+          } else {
+              g.chart.yAxis.axisLabel("Intensity (Raw)");
+              g.chart.yDomain([0, 255]);
+          }
           g.refresh();
         }, 500);
         g.datum.downloadCSV('#btn-export-csv');
