@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Route 1 - SpectralWorkbench</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bs-stepper/dist/css/bs-stepper.min.css">
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bs-stepper/dist/js/bs-stepper.min.js"></script>
+  <script src="https://d3js.org/d3.v3.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.6/nv.d3.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+
+  <!-- Local scripts -->
+  <script src="../capture/graph.js" type="text/javascript"></script>
+  <script src="../capture/capture.js" type="text/javascript"></script>
+  <script src="../../dist/capture.dist.js" type="text/javascript"></script>
+  <script src="../capture/api.js" type="text/javascript"></script>
+  <script src="../../dist/spectral-workbench.js" type="text/javascript"></script>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.6/nv.d3.min.css" rel="stylesheet">
+  <link href="../../dist/spectral-workbench.css" rel="stylesheet">
+  <link href="new-capture.css" media="all" rel="stylesheet" type="text/css" />
+
+  <style>
+    .upload-card { padding: 15px; margin: 20px 0; }
+    .upload-preview-area { background: #f0f0f0; border: 1px dashed #ccc; border-radius: 6px; padding: 10px; margin-top: 10px; text-align: center; max-height: 500px; overflow-y: auto; }
+    .upload-preview-canvas { max-width: 100%; border-radius: 4px; cursor: crosshair; }
+    .row-highlight { position: absolute; left: 0; right: 0; height: 2px; background: #ffcc00; box-shadow: 0 0 4px #ffaa33; pointer-events: none; }
+    .svg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: all; }
+    .svg-overlay circle { pointer-events: all; cursor: move; }
+    .btn-spectrum { background: #2c6e9e; border: none; color: white; margin-right: 8px; }
+    .btn-spectrum:hover { background: #1e4a6e; color: white; }
+    .nvd3 .nv-axis text, .nvd3 .nv-legend text { fill: #333 !important; }
+    .calib-marker { stroke: red; stroke-width: 2px; }
+    .calib-marker-label { fill: red; font-size: 10px; font-weight: bold; }
+    #calibGraph svg { cursor: crosshair !important; }
+    .color-bar-container { width: 100%; height: 15px; margin-bottom: 5px; border: 1px solid #ccc; overflow: hidden; position: relative; }
+    .color-bar-canvas { width: 100%; height: 100%; }
+    .color-bar-label { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-weight: bold; pointer-events: none; color: #333; font-size: 10px; }
+    .step-content { padding: 20px; }
+    .nav-buttons { margin-top: 20px; }
+  </style>
+</head>
+
+<body class="full-stretch-block">
+  <div class="full-stretch-block bs-stepper">
+    <div class="bs-stepper-header" role="tablist">
+      <div class="step" data-target="#source-selection">
+        <button type="button" class="step-trigger" role="tab" aria-controls="source-selection" id="source-selection-trigger">
+          <span class="bs-stepper-label">1. Source</span>
+        </button>
+      </div>
+      <div class="line"></div>
+      <div class="step" data-target="#input-step">
+        <button type="button" class="step-trigger" role="tab" aria-controls="input-step" id="input-step-trigger">
+          <span class="bs-stepper-label">2. Input</span>
+        </button>
+      </div>
+      <div class="line"></div>
+      <div class="step" data-target="#calibration">
+        <button type="button" class="step-trigger" role="tab" aria-controls="calibration" id="calibration-trigger">
+          <span class="bs-stepper-label">3. Calibration</span>
+        </button>
+      </div>
+      <div class="line"></div>
+      <div class="step" data-target="#final-results">
+        <button type="button" class="step-trigger" role="tab" aria-controls="final-results" id="final-results-trigger">
+          <span class="bs-stepper-label">4. Results</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="capture full-stretch-block bs-stepper-content" id="main-content">
+
+      <!-- Step 1: Source Selection -->
+      <div id="source-selection" class="content text-center" role="tabpanel">
+        <div class="step-content">
+          <h2>Select Image Source</h2>
+          <p>Analyze a single image from your computer or capture one from your webcam.</p>
+          <br>
+          <button class="btn btn-primary btn-lg" id="choose-upload">Upload an Image</button>
+          <button class="btn btn-info btn-lg" id="choose-webcam">Use Webcam</button>
+          <br><br>
+          <a href="index.html" class="btn btn-default">Return to Home</a>
+        </div>
+      </div>
+
+      <!-- Step 2: Input (Upload or Webcam) -->
+      <div id="input-step" class="content" role="tabpanel">
+        <div class="step-content">
+          <!-- Upload UI -->
+          <div id="upload-ui" style="display:none;">
+            <h3>Upload Spectrum Image</h3>
+            <div class="upload-card">
+              <input type="file" id="spectrumImageUpload" accept="image/jpeg,image/png" style="display:none;">
+              <button class="btn btn-spectrum" id="triggerUploadBtn"><i class="fa fa-folder-open"></i> Choose Image</button>
+              <span id="uploadFileName" style="margin-left:10px;"></span>
+              <div id="uploadPreviewContainer" class="upload-preview-area" style="display:none;">
+                <div style="position:relative; display:inline-block;">
+                  <canvas id="uploadPreviewCanvas" class="upload-preview-canvas" width="640" height="200"></canvas>
+                </div>
+                <p class="text-muted" style="margin-top:5px;">Click twice to set the sampling line (Point A to Point B).</p>
+                <div id="rowCoordDisplay"></div>
+              </div>
+            </div>
+            <div class="nav-buttons">
+              <button class="btn btn-default prev-step">Return to previous step</button>
+              <button class="btn btn-primary" id="processUploadedBtn" disabled>Next: Calibrate Peaks</button>
+            </div>
+          </div>
+
+          <!-- Webcam UI -->
+          <div id="webcam-ui" style="display:none;" class="text-center">
+            <h3>Webcam Capture</h3>
+            <div id="webcam-settings-area">
+                <div id="webcam-msg"><p><b>Requesting camera access...</b></p></div>
+                <div id="webcam" style="display:inline-block; position: relative;"></div>
+                <div class="select" style="padding-top:5px;">
+                  <label for="videoSource">Camera: </label><select id="videoSource"></select>
+                </div>
+                <br>
+                <button class="btn btn-primary" id="go-to-capture">Next: Capture Spectra</button>
+            </div>
+
+            <div id="webcam-capture-area" style="display:none;">
+                <div class="row">
+                    <div class="col-md-4">
+                        <canvas style="width:100%;height:100px;" id="preview"></canvas>
+                        <p class="small">Live Preview</p>
+                    </div>
+                    <div class="col-md-8">
+                        <div id="graph" style="width: 100%; height: 200px;"></div>
+                        <canvas style="background:#333;width:100%;height:100px;" id="canvas"></canvas>
+                    </div>
+                </div>
+                <br>
+                <button class="btn btn-success btn-lg" id="capture-page-next">Save Capture & Proceed</button>
+            </div>
+
+            <div class="nav-buttons">
+              <button class="btn btn-default prev-step">Return to previous step</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Step 4: Calibration (Rough) -->
+      <div id="calibration" class="content center-content" role="tabpanel">
+        <div class="step-content">
+          <h3>Peak Calibration</h3>
+          <p>Click on two known peaks in the spectrum and enter their wavelengths.</p>
+
+          <div id="calibGraphSection" style="width: 100%;">
+            <div style="position: relative;">
+              <div class="color-bar-container" id="calib-color-bar-container">
+                <canvas id="calib-color-bar" class="color-bar-canvas"></canvas>
+              </div>
+              <div id="calibGraph" style="height: 300px; width: 100%;"></div>
+            </div>
+
+            <div class="row" style="margin-top: 15px;">
+              <div class="col-md-6">
+                <div class="input-group">
+                  <label class="input-group-addon">Point 1 (Pixel: <span id="p1-pixel">-</span>)</label>
+                  <input type="number" id="p1-nm" class="form-control" placeholder="Wavelength 1 (nm)">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="input-group">
+                  <label class="input-group-addon">Point 2 (Pixel: <span id="p2-pixel">-</span>)</label>
+                  <input type="number" id="p2-nm" class="form-control" placeholder="Wavelength 2 (nm)">
+                </div>
+              </div>
+            </div>
+
+            <div class="nav-buttons text-center">
+              <button class="btn btn-default prev-step">Return to previous step</button>
+              <button class="btn btn-info" id="btn-flip-calib"><i class="fa fa-refresh"></i> Flip Horizontally</button>
+              <button class="btn btn-success" id="btn-apply-calibration" disabled>Apply Calibration</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 5: Final Results -->
+      <div id="final-results" class="content center-content" role="tabpanel">
+        <div class="step-content">
+          <h3>Final Calibrated Spectrum</h3>
+          <div class="swb-graphing center-content" style="width: 100%;">
+            <div class="color-bar-container" id="final-color-bar-container">
+              <canvas id="final-color-bar" class="color-bar-canvas"></canvas>
+            </div>
+            <div id="graph-final" style="height: 400px; width: 100%;"></div>
+          </div>
+          <div style="margin-top: 10px; text-align: center;">
+            <label><input type="checkbox" id="toggle-relative"> Show Relative Intensity (100% max)</label>
+          </div>
+          <div class="nav-buttons text-center">
+            <button class="btn btn-default prev-step">Return to previous step</button>
+            <button class="btn btn-default" id="btn-export-final-csv"><i class="fa fa-download"></i> Export CSV</button>
+            <a href="index.html" class="btn btn-primary">Start Over</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // --- Helper functions from index.html ---
+    function createRGBSpectrum(pixels) {
+      var lines = pixels.map(function(pixel, idx) {
+        var r = pixel.r, g = pixel.g, b = pixel.b;
+        var avg = (r + g + b) / 3;
+        return { pixel: idx, r: r, g: g, b: b, average: avg };
+      });
+      return new SpectralWorkbench.Spectrum({ data: { lines: lines } });
+    }
+
+    function wavelengthToRGB(wavelength) {
+      let r, g, b, factor;
+      if (wavelength >= 380 && wavelength < 440) { r = -(wavelength - 440) / (440 - 380); g = 0.0; b = 1.0; }
+      else if (wavelength >= 440 && wavelength < 490) { r = 0.0; g = (wavelength - 440) / (490 - 440); b = 1.0; }
+      else if (wavelength >= 490 && wavelength < 510) { r = 0.0; g = 1.0; b = -(wavelength - 510) / (510 - 490); }
+      else if (wavelength >= 510 && wavelength < 580) { r = (wavelength - 510) / (580 - 510); g = 1.0; b = 0.0; }
+      else if (wavelength >= 580 && wavelength < 645) { r = 1.0; g = -(wavelength - 645) / (645 - 580); b = 0.0; }
+      else if (wavelength >= 645 && wavelength <= 780) { r = 1.0; g = 0.0; b = 0.0; }
+      else { r = 0.0; g = 0.0; b = 0.0; }
+
+      if (wavelength >= 380 && wavelength < 420) factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380);
+      else if (wavelength >= 420 && wavelength <= 700) factor = 1.0;
+      else if (wavelength > 700 && wavelength <= 780) factor = 0.3 + 0.7 * (780 - wavelength) / (780 - 700);
+      else factor = 0.0;
+
+      const gamma = 0.8, intensityMax = 255;
+      const adjust = (c, f) => Math.round(intensityMax * Math.pow(c * f, gamma));
+      return { r: adjust(r, factor), g: adjust(g, factor), b: adjust(b, factor) };
+    }
+
+    function updateColorBar(canvasId, pixels, extent, calibratedLines) {
+      let canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      let displayWidth = canvas.clientWidth, displayHeight = canvas.clientHeight || 15;
+      if (canvas.width !== displayWidth || canvas.height !== displayHeight) { canvas.width = displayWidth; canvas.height = displayHeight; }
+      let container = canvas.parentNode;
+      let label = container.querySelector('.color-bar-label') || document.createElement('div');
+      label.className = 'color-bar-label'; label.innerText = "";
+      if (!label.parentNode) container.appendChild(label);
+
+      let ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      if (calibratedLines) {
+        let visibleLines = extent ? calibratedLines.filter(l => l.wavelength >= extent[0] && l.wavelength <= extent[1]) : calibratedLines;
+        if (visibleLines.length === 0) return;
+        let step = w / visibleLines.length;
+        visibleLines.forEach((line, i) => {
+          let x = i * step;
+          if (line.wavelength < 380 || line.wavelength > 780) { ctx.fillStyle = "white"; }
+          else {
+            let baseColor = wavelengthToRGB(line.wavelength);
+            let intensity = line.average / 255;
+            ctx.fillStyle = `rgb(${Math.round(baseColor.r * intensity)},${Math.round(baseColor.g * intensity)},${Math.round(baseColor.b * intensity)})`;
+          }
+          ctx.fillRect(x, 0, step + 1, h);
+        });
+        return;
+      }
+      if (!pixels || pixels.length === 0) return;
+      let startIdx = extent ? Math.max(0, Math.floor(extent[0])) : 0;
+      let endIdx = extent ? Math.min(pixels.length - 1, Math.ceil(extent[1])) : pixels.length - 1;
+      let visibleCount = endIdx - startIdx + 1, step = w / visibleCount;
+      for (let i = 0; i < visibleCount; i++) {
+        let p = pixels[startIdx + i];
+        ctx.fillStyle = `rgb(${Math.round(p.r)},${Math.round(p.g)},${Math.round(p.b)})`;
+        ctx.fillRect(i * step, 0, step + 1, h);
+      }
+    }
+
+    function syncColorBar(graph, canvasId, pixels, calibratedLines) {
+      if (!graph || !graph.chart) return;
+      let update = () => { let extent = graph.chart.xAxis.scale().domain(); updateColorBar(canvasId, pixels, extent, calibratedLines); };
+      if (graph.chart.focus && graph.chart.focus.brush) graph.chart.focus.dispatch.on('brush', update);
+      graph.chart.dispatch.on('renderEnd', update);
+      update();
+    }
+
+    function setupDraggableLine(canvas, img, onUpdate) {
+      let points = { a: null, b: null };
+      let container = d3.select(canvas.parentNode);
+      container.selectAll('.svg-overlay').remove();
+      let svg = container.append('svg').attr('class', 'svg-overlay')
+          .attr('viewBox', `0 0 ${canvas.width} ${canvas.height}`)
+          .attr('preserveAspectRatio', 'xMidYMid meet');
+      let line = svg.append('line').attr('stroke', '#ffcc00').attr('stroke-width', 2).style('display', 'none');
+      let handleA = svg.append('circle').attr('r', 6).attr('fill', '#ffcc00').attr('stroke', '#ffaa33').style('display', 'none');
+      let handleB = svg.append('circle').attr('r', 6).attr('fill', '#ffcc00').attr('stroke', '#ffaa33').style('display', 'none');
+
+      let offCanvas = document.createElement('canvas'); offCanvas.width = img.width; offCanvas.height = img.height;
+      let offCtx = offCanvas.getContext('2d'); offCtx.drawImage(img, 0, 0);
+      let swbImg = new SpectralWorkbench.Image(null, { url: img.src }); swbImg.obj = img; swbImg.width = img.width; swbImg.height = img.height; swbImg.ctx = offCtx;
+
+      function updateUI() {
+        let rect = canvas.getBoundingClientRect();
+        let scale = canvas.width / rect.width;
+        if (points.a) handleA.attr({cx: points.a.x, cy: points.a.y, r: 6 * scale}).style({'display': 'block', 'stroke-width': 2 * scale});
+        if (points.b) {
+          handleB.attr({cx: points.b.x, cy: points.b.y, r: 6 * scale}).style({'display': 'block', 'stroke-width': 2 * scale});
+          line.attr({x1: points.a.x, y1: points.a.y, x2: points.b.x, y2: points.b.y}).style({'display': 'block', 'stroke-width': 2 * scale});
+        }
+        if (points.a && points.b) {
+          let scaleX = img.width / canvas.width, scaleY = img.height / canvas.height;
+          let rawPixels = swbImg.getLine(points.a.x * scaleX, points.a.y * scaleY, points.b.x * scaleX, points.b.y * scaleY);
+          onUpdate(rawPixels.map(p => ({ r: p[0], g: p[1], b: p[2] })), points);
+        }
+      }
+      let drag = d3.behavior.drag().on('drag', function() {
+        let isA = d3.select(this).node() === handleA.node();
+        let target = isA ? points.a : points.b;
+        target.x = Math.max(0, Math.min(canvas.width, d3.event.x)); target.y = Math.max(0, Math.min(canvas.height, d3.event.y));
+        updateUI();
+      $(window).on('resize', updateUI);
+      });
+      handleA.call(drag); handleB.call(drag);
+      svg.on('click', function() {
+        if (points.a && points.b) return;
+        let m = d3.mouse(this);
+        if (!points.a) points.a = { x: m[0], y: m[1] }; else if (!points.b) points.b = { x: m[0], y: m[1] };
+        updateUI();
+      });
+      return { reset: () => { points = { a: null, b: null }; updateUI(); line.style('display', 'none'); handleA.style('display', 'none'); handleB.style('display', 'none'); } };
+    }
+
+    $(document).ready(function() {
+      var stepper = new Stepper($('.bs-stepper')[0], { linear: false });
+      var uploadPixels = null, targetPixels = null, finalGraph = null, calibGraph = null, calibratedGraph = null;
+      var calibVars = { p1: { x: null, nm: null }, p2: { x: null, nm: null } };
+
+      $('.prev-step').click(() => stepper.previous());
+
+      $('#choose-upload').click(() => {
+        $('#upload-ui').show(); $('#webcam-ui').hide();
+        stepper.next();
+      });
+
+      $('#choose-webcam').click(() => {
+        $('#webcam-ui').show(); $('#upload-ui').hide();
+        $('#webcam-settings-area').show(); $('#webcam-capture-area').hide();
+        stepper.next();
+        if (!window.webcamStarted) {
+            $W.initialize({ calibrated: false, interface:"capture", mode:"combined", width: 640 });
+            setInterval($W.getRow, 100);
+            window.webcamStarted = true;
+        }
+      });
+
+      $('#go-to-capture').click(() => {
+          $('#webcam-settings-area').hide(); $('#webcam-capture-area').show();
+      });
+
+      // Upload Logic
+      $('#triggerUploadBtn').click(() => $('#spectrumImageUpload').click());
+      $('#spectrumImageUpload').change(e => {
+        let file = e.target.files[0]; if (!file) return;
+        $('#uploadFileName').text(file.name);
+        let reader = new FileReader();
+        reader.onload = ev => {
+          let img = new Image();
+          img.onload = () => {
+            let canvas = document.getElementById('uploadPreviewCanvas');
+            let ctx = canvas.getContext('2d');
+            canvas.width = Math.min(640, img.width); canvas.height = (canvas.width / img.width) * img.height;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            $('#uploadPreviewContainer').show();
+            setupDraggableLine(canvas, img, pixels => { uploadPixels = pixels; $('#processUploadedBtn').prop('disabled', false); });
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      function initializePlot(pixels) {
+        targetPixels = pixels;
+        $('#graph1').empty();
+        finalGraph = new SpectralWorkbench.Graph({ selector: '#graph1' });
+        finalGraph.chart.margin({ top: 30, right: 20, bottom: 50, left: 60 });
+        finalGraph.chart.xAxis.axisLabel("Distance (pixels)");
+        finalGraph.load(createRGBSpectrum(pixels));
+        setTimeout(() => { if (finalGraph) { finalGraph.updateSize()(); syncColorBar(finalGraph, 'plotting-color-bar', pixels); } }, 300);
+      }
+
+      function goToCalibration(pixels) {
+        targetPixels = pixels;
+        stepper.to(3);
+        $('#calibGraph').empty();
+        calibGraph = new SpectralWorkbench.Graph({ selector: '#calibGraph' });
+        calibGraph.chart.margin({ top: 30, right: 20, bottom: 50, left: 60 });
+        calibGraph.chart.xAxis.axisLabel("Distance (pixels)");
+        calibGraph.load(createRGBSpectrum(targetPixels));
+
+        setTimeout(() => {
+          calibGraph.updateSize()(); syncColorBar(calibGraph, 'calib-color-bar', targetPixels);
+          d3.select('#calibGraph svg').on('click', function() {
+            let mouse = d3.mouse(d3.select('#calibGraph .nv-focus').node());
+            let dataX = calibGraph.chart.xAxis.scale().invert(mouse[0]);
+            if (calibVars.p1.x === null || (calibVars.p1.x !== null && calibVars.p2.x !== null)) {
+              calibVars.p1.x = dataX; $('#p1-pixel').text(Math.round(dataX)); calibVars.p2.x = null; $('#p2-pixel').text('-');
+            } else {
+              calibVars.p2.x = dataX; $('#p2-pixel').text(Math.round(dataX));
+            }
+            checkCalibReady(); renderMarkers();
+          });
+        }, 500);
+      }
+
+      $('#processUploadedBtn').click(() => {
+        goToCalibration(uploadPixels);
+      });
+
+      $('#capture-page-next').click(() => {
+        $W.saveSpectrum();
+        let rowData = $W.full_data;
+        let pixels = rowData.map(p => (Array.isArray(p) ? { r: p[0], g: p[1], b: p[2] } : typeof p === 'object' ? p : { r: p, g: p, b: p }));
+        goToCalibration(pixels);
+      });
+
+      function checkCalibReady() {
+        calibVars.p1.nm = parseFloat($('#p1-nm').val()); calibVars.p2.nm = parseFloat($('#p2-nm').val());
+        $('#btn-apply-calibration').prop('disabled', !(calibVars.p1.x !== null && calibVars.p2.x !== null && !isNaN(calibVars.p1.nm) && !isNaN(calibVars.p2.nm)));
+      }
+      $('#p1-nm, #p2-nm').on('input', checkCalibReady);
+
+      function renderMarkers() {
+        let svg = d3.select('#calibGraph svg .nv-focus');
+        svg.selectAll('.calib-marker-group').remove();
+        let group = svg.append('g').attr('class', 'calib-marker-group');
+        [calibVars.p1, calibVars.p2].forEach((p, i) => {
+          if (p.x === null) return;
+          let x = calibGraph.chart.xAxis.scale()(p.x);
+          group.append('line').attr({ class: 'calib-marker', x1: x, x2: x, y1: 0, y2: calibGraph.height });
+          group.append('text').attr({ class: 'calib-marker-label', x: x, y: -5, 'text-anchor': 'middle' }).text('P' + (i + 1));
+        });
+      }
+
+      var finalLines = null;
+      function renderFinalGraph() {
+        let isRelative = $('#toggle-relative').is(':checked');
+        let linesToUse = finalLines;
+        if (isRelative && finalLines) {
+          let maxAvg = Math.max(...finalLines.map(l => l.average));
+          if (maxAvg > 0) {
+            linesToUse = finalLines.map(l => ({
+              ...l,
+              average: (l.average / maxAvg) * 100,
+              r: (l.r / maxAvg) * 100,
+              g: (l.g / maxAvg) * 100,
+              b: (l.b / maxAvg) * 100
+            }));
+          }
+        }
+        $('#graph-final').empty();
+        calibratedGraph = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
+        calibratedGraph.chart.xAxis.axisLabel("Wavelength (nm)");
+        calibratedGraph.load(new SpectralWorkbench.Spectrum({ data: { lines: linesToUse } }));
+        setTimeout(() => {
+          calibratedGraph.updateSize()();
+          syncColorBar(calibratedGraph, 'final-color-bar', null, linesToUse);
+          if (isRelative) calibratedGraph.chart.yAxis.axisLabel("Intensity (%)");
+          else calibratedGraph.chart.yAxis.axisLabel("Intensity");
+          calibratedGraph.refresh();
+        }, 500);
+        calibratedGraph.datum.downloadCSV('#btn-export-final-csv');
+      }
+
+      $('#toggle-relative').change(renderFinalGraph);
+
+      $('#btn-apply-calibration').click(() => {
+        let width = targetPixels.length;
+        let n1 = calibVars.p1.x / (width - 1), n2 = calibVars.p2.x / (width - 1);
+        let m = (calibVars.p2.nm - calibVars.p1.nm) / (n2 - n1), c = calibVars.p1.nm - m * n1;
+        finalLines = targetPixels.map((p, idx) => ({
+          wavelength: +(m * (idx / (width - 1)) + c).toFixed(2),
+          r: p.r, g: p.g, b: p.b, average: (p.r + p.g + p.b) / 3
+        }));
+        stepper.to(4);
+        renderFinalGraph();
+      });
+
+      $('#btn-flip-calib').click(() => { targetPixels.reverse(); goToCalibration(targetPixels); });
+    });
+  </script>
+</body>
+</html>
