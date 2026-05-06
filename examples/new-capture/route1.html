@@ -199,6 +199,9 @@
             </div>
             <div id="graph-final" style="height: 400px; width: 100%;"></div>
           </div>
+          <div style="margin-top: 10px; text-align: center;">
+            <label><input type="checkbox" id="toggle-relative"> Show Relative Intensity (100% max)</label>
+          </div>
           <div class="nav-buttons text-center">
             <button class="btn btn-default prev-step">Return to previous step</button>
             <button class="btn btn-default" id="btn-export-final-csv"><i class="fa fa-download"></i> Export CSV</button>
@@ -443,21 +446,48 @@
         });
       }
 
+      var finalLines = null;
+      function renderFinalGraph() {
+        let isRelative = $('#toggle-relative').is(':checked');
+        let linesToUse = finalLines;
+        if (isRelative && finalLines) {
+          let maxAvg = Math.max(...finalLines.map(l => l.average));
+          if (maxAvg > 0) {
+            linesToUse = finalLines.map(l => ({
+              ...l,
+              average: (l.average / maxAvg) * 100,
+              r: (l.r / maxAvg) * 100,
+              g: (l.g / maxAvg) * 100,
+              b: (l.b / maxAvg) * 100
+            }));
+          }
+        }
+        $('#graph-final').empty();
+        calibratedGraph = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
+        calibratedGraph.chart.xAxis.axisLabel("Wavelength (nm)");
+        calibratedGraph.load(new SpectralWorkbench.Spectrum({ data: { lines: linesToUse } }));
+        setTimeout(() => {
+          calibratedGraph.updateSize()();
+          syncColorBar(calibratedGraph, 'final-color-bar', null, linesToUse);
+          if (isRelative) calibratedGraph.chart.yAxis.axisLabel("Intensity (%)");
+          else calibratedGraph.chart.yAxis.axisLabel("Intensity");
+          calibratedGraph.refresh();
+        }, 500);
+        calibratedGraph.datum.downloadCSV('#btn-export-final-csv');
+      }
+
+      $('#toggle-relative').change(renderFinalGraph);
+
       $('#btn-apply-calibration').click(() => {
         let width = targetPixels.length;
         let n1 = calibVars.p1.x / (width - 1), n2 = calibVars.p2.x / (width - 1);
         let m = (calibVars.p2.nm - calibVars.p1.nm) / (n2 - n1), c = calibVars.p1.nm - m * n1;
-        let lines = targetPixels.map((p, idx) => ({
+        finalLines = targetPixels.map((p, idx) => ({
           wavelength: +(m * (idx / (width - 1)) + c).toFixed(2),
           r: p.r, g: p.g, b: p.b, average: (p.r + p.g + p.b) / 3
         }));
         stepper.to(4);
-        $('#graph-final').empty();
-        calibratedGraph = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
-        calibratedGraph.chart.xAxis.axisLabel("Wavelength (nm)");
-        calibratedGraph.load(new SpectralWorkbench.Spectrum({ data: { lines: lines } }));
-        setTimeout(() => { calibratedGraph.updateSize()(); syncColorBar(calibratedGraph, 'final-color-bar', null, lines); }, 500);
-        calibratedGraph.datum.downloadCSV('#btn-export-final-csv');
+        renderFinalGraph();
       });
 
       $('#btn-flip-calib').click(() => { targetPixels.reverse(); goToCalibration(targetPixels); });

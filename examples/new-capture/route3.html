@@ -29,7 +29,9 @@
     .upload-preview-area { background: #f0f0f0; border: 1px dashed #ccc; border-radius: 6px; padding: 10px; margin-top: 10px; text-align: center; }
     .upload-preview-canvas { max-width: 100%; border-radius: 4px; cursor: crosshair; }
     .svg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: all; }
-    .svg-overlay circle, .svg-overlay g.handle { pointer-events: all; cursor: move; }
+    .svg-overlay circle, .svg-overlay g.handle, .svg-overlay .rot-handle { pointer-events: all; cursor: move; }
+    .rot-handle circle { fill: #00ff00; stroke: #008800; }
+    .rot-stalk { stroke: #008800; stroke-width: 1; stroke-dasharray: 2,2; }
     .color-bar-container { width: 100%; height: 15px; margin-bottom: 5px; border: 1px solid #ccc; overflow: hidden; position: relative; }
     .color-bar-canvas { width: 100%; height: 100%; }
     .color-bar-label { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-weight: bold; pointer-events: none; color: #333; font-size: 10px; }
@@ -169,6 +171,9 @@
           <h3>Final Calibrated Spectrum (Sample Image)</h3>
           <div class="color-bar-container"><canvas id="final-color-bar" class="color-bar-canvas"></canvas></div>
           <div id="graph-final" style="height: 400px; width: 100%;"></div>
+          <div style="margin-top: 10px;">
+            <label><input type="checkbox" id="toggle-relative"> Show Relative Intensity (100% max)</label>
+          </div>
           <div class="nav-buttons">
             <button class="btn btn-default prev-step">Return to previous step</button>
             <button class="btn btn-default" id="btn-export-csv"><i class="fa fa-download"></i> Export CSV</button>
@@ -328,6 +333,7 @@
             .attr('preserveAspectRatio', 'xMidYMid meet');
 
         let line = svg.append('line').attr('stroke', '#ffcc00').attr('stroke-width', 2).style('display', 'none');
+        let stalk = svg.append('line').attr('class', 'rot-stalk').style('display', 'none');
         let handleA = svg.append('circle').attr({r: 6, fill: '#ffcc00', stroke: '#ffaa33'}).style('display', 'none');
         let handleB = svg.append('circle').attr({r: 6, fill: '#ffcc00', stroke: '#ffaa33'}).style('display', 'none');
 
@@ -336,13 +342,26 @@
         handleRef.append('line').attr({x1: 0, y1: -8, x2: 0, y2: 8, stroke: 'blue', 'stroke-width': 3});
         handleRef.append('circle').attr({r: 10, fill: 'transparent'});
 
+        let handleRot = svg.append('g').attr('class', 'rot-handle').style('display', 'none');
+        handleRot.append('circle').attr({r: 5});
+
         function updateUI() {
           if (endpoints.a) handleA.attr({cx: endpoints.a.x, cy: endpoints.a.y}).style('display', 'block');
           if (endpoints.b) {
             handleB.attr({cx: endpoints.b.x, cy: endpoints.b.y}).style('display', 'block');
             line.attr({x1: endpoints.a.x, y1: endpoints.a.y, x2: endpoints.b.x, y2: endpoints.b.y}).style('display', 'block');
           }
-          if (endpoints.ref) handleRef.attr('transform', `translate(${endpoints.ref.x},${endpoints.ref.y})`).style('display', 'block');
+          if (endpoints.ref) {
+            handleRef.attr('transform', `translate(${endpoints.ref.x},${endpoints.ref.y})`).style('display', 'block');
+
+            // Position rotation handle at 0 degrees (up) relative to ref
+            // Or use an angle if we want it to follow the line's orientation.
+            // Let's just put it 30px above ref for now.
+            let rotX = endpoints.ref.x;
+            let rotY = endpoints.ref.y - 30;
+            handleRot.attr('transform', `translate(${rotX},${rotY})`).style('display', 'block');
+            stalk.attr({x1: endpoints.ref.x, y1: endpoints.ref.y, x2: rotX, y2: rotY}).style('display', 'block');
+          }
 
           let outOfBounds = false;
           [endpoints.a, endpoints.b, endpoints.ref].forEach(p => {
@@ -353,30 +372,61 @@
           onUpdate(endpoints, outOfBounds);
         }
 
-        let drag = d3.behavior.drag().on('drag', function() {
-          let node = d3.select(this).node();
-          if (relativeMode) {
-            // Relative movement: drag ANY point to move the entire set
-            let dx = d3.event.dx, dy = d3.event.dy;
-            if (endpoints.a) { endpoints.a.x += dx; endpoints.a.y += dy; }
-            if (endpoints.b) { endpoints.b.x += dx; endpoints.b.y += dy; }
-            if (endpoints.ref) { endpoints.ref.x += dx; endpoints.ref.y += dy; }
-          } else {
-            // Definition phase: move points independently
-            if (node === handleRef.node()) {
-              endpoints.ref.x = d3.event.x; endpoints.ref.y = d3.event.y;
-            } else if (node === handleA.node()) {
-              endpoints.a.x = d3.event.x; endpoints.a.y = d3.event.y;
-            } else if (node === handleB.node()) {
-              endpoints.b.x = d3.event.x; endpoints.b.y = d3.event.y;
+        let startAngles = null;
+        let drag = d3.behavior.drag()
+          .on('dragstart', function() {
+            if (relativeMode && d3.select(this).classed('rot-handle')) {
+              let mouse = d3.mouse(svg.node());
+              let startAngle = Math.atan2(mouse[1] - endpoints.ref.y, mouse[0] - endpoints.ref.x);
+              startAngles = {
+                mouse: startAngle,
+                a: endpoints.a ? Math.atan2(endpoints.a.y - endpoints.ref.y, endpoints.a.x - endpoints.ref.x) : 0,
+                b: endpoints.b ? Math.atan2(endpoints.b.y - endpoints.ref.y, endpoints.b.x - endpoints.ref.x) : 0,
+                distA: endpoints.a ? Math.sqrt(Math.pow(endpoints.a.x - endpoints.ref.x, 2) + Math.pow(endpoints.a.y - endpoints.ref.y, 2)) : 0,
+                distB: endpoints.b ? Math.sqrt(Math.pow(endpoints.b.x - endpoints.ref.x, 2) + Math.pow(endpoints.b.y - endpoints.ref.y, 2)) : 0
+              };
             }
-          }
-          updateUI();
-        });
+          })
+          .on('drag', function() {
+            let node = d3.select(this).node();
+            if (relativeMode) {
+              if (d3.select(this).classed('rot-handle')) {
+                let mouse = d3.mouse(svg.node());
+                let currentAngle = Math.atan2(mouse[1] - endpoints.ref.y, mouse[0] - endpoints.ref.x);
+                let delta = currentAngle - startAngles.mouse;
+
+                if (endpoints.a) {
+                  endpoints.a.x = endpoints.ref.x + startAngles.distA * Math.cos(startAngles.a + delta);
+                  endpoints.a.y = endpoints.ref.y + startAngles.distA * Math.sin(startAngles.a + delta);
+                }
+                if (endpoints.b) {
+                  endpoints.b.x = endpoints.ref.x + startAngles.distB * Math.cos(startAngles.b + delta);
+                  endpoints.b.y = endpoints.ref.y + startAngles.distB * Math.sin(startAngles.b + delta);
+                }
+              } else {
+                // Relative translation
+                let dx = d3.event.dx, dy = d3.event.dy;
+                if (endpoints.a) { endpoints.a.x += dx; endpoints.a.y += dy; }
+                if (endpoints.b) { endpoints.b.x += dx; endpoints.b.y += dy; }
+                if (endpoints.ref) { endpoints.ref.x += dx; endpoints.ref.y += dy; }
+              }
+            } else {
+              // Definition phase: move points independently
+              if (node === handleRef.node()) {
+                endpoints.ref.x = d3.event.x; endpoints.ref.y = d3.event.y;
+              } else if (node === handleA.node()) {
+                endpoints.a.x = d3.event.x; endpoints.a.y = d3.event.y;
+              } else if (node === handleB.node()) {
+                endpoints.b.x = d3.event.x; endpoints.b.y = d3.event.y;
+              }
+            }
+            updateUI();
+          });
 
         handleRef.call(drag);
         handleA.call(drag);
         handleB.call(drag);
+        handleRot.call(drag);
 
         svg.on('click', function() {
           if (relativeMode) return;
@@ -463,6 +513,38 @@
         }, true, 'sample-error');
       });
 
+      var finalLines = null;
+      function renderFinalGraph() {
+        let isRelative = $('#toggle-relative').is(':checked');
+        let linesToUse = finalLines;
+        if (isRelative && finalLines) {
+          let maxAvg = Math.max(...finalLines.map(l => l.average));
+          if (maxAvg > 0) {
+            linesToUse = finalLines.map(l => ({
+              ...l,
+              average: (l.average / maxAvg) * 100,
+              r: (l.r / maxAvg) * 100,
+              g: (l.g / maxAvg) * 100,
+              b: (l.b / maxAvg) * 100
+            }));
+          }
+        }
+
+        $('#graph-final').empty();
+        let g = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
+        g.load(new SpectralWorkbench.Spectrum({ data: { lines: linesToUse } }));
+        setTimeout(() => {
+          g.updateSize()();
+          syncColorBar(g, 'final-color-bar', null, linesToUse);
+          if (isRelative) g.chart.yAxis.axisLabel("Intensity (%)");
+          else g.chart.yAxis.axisLabel("Intensity");
+          g.refresh();
+        }, 500);
+        g.datum.downloadCSV('#btn-export-csv');
+      }
+
+      $('#toggle-relative').change(renderFinalGraph);
+
       $('#btn-apply-calibration').click(() => {
         let w = calibPixels.length;
         let n1 = calibVars.p1.x / (w - 1), n2 = calibVars.p2.x / (w - 1);
@@ -470,19 +552,12 @@
         let cw = 800, ch = (800/images.sample.width)*images.sample.height;
         let finalSamplePixels = extractPixels(images.sample, endpoints, cw, ch);
         let sw = finalSamplePixels.length;
-        let lines = finalSamplePixels.map((p, i) => ({
+        finalLines = finalSamplePixels.map((p, i) => ({
           wavelength: +(m * (i / (sw - 1)) + c).toFixed(2),
           r: p.r, g: p.g, b: p.b, average: (p.r + p.g + p.b) / 3
         }));
         stepper.to(5);
-        $('#graph-final').empty();
-        let g = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
-        g.load(new SpectralWorkbench.Spectrum({ data: { lines: lines } }));
-        setTimeout(() => {
-          g.updateSize()();
-          syncColorBar(g, 'final-color-bar', null, lines);
-        }, 500);
-        g.datum.downloadCSV('#btn-export-csv');
+        renderFinalGraph();
       });
     });
   </script>
