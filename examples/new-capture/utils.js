@@ -29,7 +29,6 @@ function updateColorBar(canvasId, pixels, extent, calibratedLines) {
   ctx.clearRect(0, 0, w, h);
 
   if (calibratedLines) {
-    // calibratedLines is typically spec.average which is an array of {x, y} where y is 0-1
     let visibleLines = extent ? calibratedLines.filter(l => l.x >= extent[0] && l.x <= extent[1]) : calibratedLines;
     if (visibleLines.length === 0) return;
     let step = w / visibleLines.length;
@@ -135,6 +134,13 @@ function setupDraggableLine3Point(canvas, img, endpoints, onUpdate, relativeMode
   let handleRot = svg.append('g').attr('class', 'rot-handle').style('display', 'none');
   handleRot.append('circle').attr({r: 5});
 
+  // Track rotation angle
+  if (typeof endpoints.angle === 'undefined') endpoints.angle = 0;
+
+  let offCanvas = document.createElement('canvas'); offCanvas.width = img.width; offCanvas.height = img.height;
+  let offCtx = offCanvas.getContext('2d'); offCtx.drawImage(img, 0, 0);
+  let swbImg = new SpectralWorkbench.Image(null, { url: img.src }); swbImg.obj = img; swbImg.width = img.width; swbImg.height = img.height; swbImg.ctx = offCtx;
+
   function updateUI() {
     let rect = canvas.getBoundingClientRect();
     if (!rect.width) return;
@@ -152,14 +158,20 @@ function setupDraggableLine3Point(canvas, img, endpoints, onUpdate, relativeMode
           .style({'display': 'block', 'stroke-width': (baseSize/4) * scale});
     }
     if (endpoints.ref) {
-      handleRef.attr('transform', `translate(${endpoints.ref.x},${endpoints.ref.y}) scale(${scale * (baseSize/6)})`).style('display', 'block');
+      handleRef.attr('transform', `translate(${endpoints.ref.x},${endpoints.ref.y}) rotate(${endpoints.angle * 180 / Math.PI}) scale(${scale * (baseSize/6)})`).style('display', 'block');
       handleRef.selectAll('line').style('stroke-width', 3);
 
-      let rotX = endpoints.ref.x;
-      let rotY = endpoints.ref.y - 40 * scale;
-      handleRot.attr('transform', `translate(${rotX},${rotY}) scale(${scale * (baseSize/6)})`).style('display', 'block');
-      stalk.attr({x1: endpoints.ref.x, y1: endpoints.ref.y, x2: rotX, y2: rotY})
-           .style({'display': 'block', 'stroke-width': (baseSize/8) * scale});
+      if (relativeMode) {
+        let rotDist = 40 * scale;
+        let rotX = endpoints.ref.x + rotDist * Math.sin(endpoints.angle);
+        let rotY = endpoints.ref.y - rotDist * Math.cos(endpoints.angle);
+        handleRot.attr('transform', `translate(${rotX},${rotY}) scale(${scale * (baseSize/6)})`).style('display', 'block');
+        stalk.attr({x1: endpoints.ref.x, y1: endpoints.ref.y, x2: rotX, y2: rotY})
+             .style({'display': 'block', 'stroke-width': (baseSize/8) * scale});
+      } else {
+        handleRot.style('display', 'none');
+        stalk.style('display', 'none');
+      }
     }
 
     let outOfBounds = false;
@@ -168,21 +180,31 @@ function setupDraggableLine3Point(canvas, img, endpoints, onUpdate, relativeMode
     });
 
     if (errorId) $(`#${errorId}`).toggle(outOfBounds);
-    onUpdate(endpoints, outOfBounds);
+
+    let pixels = [];
+    if (endpoints.a && endpoints.b) {
+        let scaleX = img.width / canvas.width, scaleY = img.height / canvas.height;
+        let raw = swbImg.getLine(endpoints.a.x * scaleX, endpoints.a.y * scaleY, endpoints.b.x * scaleX, endpoints.b.y * scaleY);
+        pixels = raw.map(p => ({ r: p[0], g: p[1], b: p[2] }));
+    }
+    onUpdate(endpoints, outOfBounds, pixels);
   }
 
-  let startAngles = null;
+  let startState = null;
   let drag = d3.behavior.drag()
     .on('dragstart', function() {
-      if (relativeMode && d3.select(this).classed('rot-handle')) {
+      if (relativeMode) {
         let mouse = d3.mouse(svg.node());
-        let startAngle = Math.atan2(mouse[1] - endpoints.ref.y, mouse[0] - endpoints.ref.x);
-        startAngles = {
-          mouse: startAngle,
-          a: endpoints.a ? Math.atan2(endpoints.a.y - endpoints.ref.y, endpoints.a.x - endpoints.ref.x) : 0,
-          b: endpoints.b ? Math.atan2(endpoints.b.y - endpoints.ref.y, endpoints.b.x - endpoints.ref.x) : 0,
+        startState = {
+          mouseAngle: Math.atan2(mouse[1] - endpoints.ref.y, mouse[0] - endpoints.ref.x),
+          endpointsAngle: endpoints.angle,
+          a: endpoints.a ? { ...endpoints.a } : null,
+          b: endpoints.b ? { ...endpoints.b } : null,
+          ref: { ...endpoints.ref },
           distA: endpoints.a ? Math.sqrt(Math.pow(endpoints.a.x - endpoints.ref.x, 2) + Math.pow(endpoints.a.y - endpoints.ref.y, 2)) : 0,
-          distB: endpoints.b ? Math.sqrt(Math.pow(endpoints.b.x - endpoints.ref.x, 2) + Math.pow(endpoints.b.y - endpoints.ref.y, 2)) : 0
+          distB: endpoints.b ? Math.sqrt(Math.pow(endpoints.b.x - endpoints.ref.x, 2) + Math.pow(endpoints.b.y - endpoints.ref.y, 2)) : 0,
+          initialAngleA: endpoints.a ? Math.atan2(endpoints.a.y - endpoints.ref.y, endpoints.a.x - endpoints.ref.x) : 0,
+          initialAngleB: endpoints.b ? Math.atan2(endpoints.b.y - endpoints.ref.y, endpoints.b.x - endpoints.ref.x) : 0
         };
       }
     })
@@ -192,15 +214,16 @@ function setupDraggableLine3Point(canvas, img, endpoints, onUpdate, relativeMode
         if (d3.select(this).classed('rot-handle')) {
           let mouse = d3.mouse(svg.node());
           let currentAngle = Math.atan2(mouse[1] - endpoints.ref.y, mouse[0] - endpoints.ref.x);
-          let delta = currentAngle - startAngles.mouse;
+          let delta = currentAngle - startState.mouseAngle;
 
+          endpoints.angle = startState.endpointsAngle + delta;
           if (endpoints.a) {
-            endpoints.a.x = endpoints.ref.x + startAngles.distA * Math.cos(startAngles.a + delta);
-            endpoints.a.y = endpoints.ref.y + startAngles.distA * Math.sin(startAngles.a + delta);
+            endpoints.a.x = endpoints.ref.x + startState.distA * Math.cos(startState.initialAngleA + delta);
+            endpoints.a.y = endpoints.ref.y + startState.distA * Math.sin(startState.initialAngleA + delta);
           }
           if (endpoints.b) {
-            endpoints.b.x = endpoints.ref.x + startAngles.distB * Math.cos(startAngles.b + delta);
-            endpoints.b.y = endpoints.ref.y + startAngles.distB * Math.sin(startAngles.b + delta);
+            endpoints.b.x = endpoints.ref.x + startState.distB * Math.cos(startState.initialAngleB + delta);
+            endpoints.b.y = endpoints.ref.y + startState.distB * Math.sin(startState.initialAngleB + delta);
           }
         } else {
           let dx = d3.event.dx, dy = d3.event.dy;

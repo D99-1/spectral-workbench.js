@@ -33,7 +33,7 @@
     .svg-overlay circle, .svg-overlay g.handle, .svg-overlay .rot-handle { pointer-events: all; cursor: move; }
     .rot-handle circle { fill: #00ff00; stroke: #008800; }
     .rot-stalk { stroke: #008800; stroke-width: 1; stroke-dasharray: 2,2; }
-    .color-bar-container { height: 15px; margin-bottom: 5px; border: 1px solid #ccc; overflow: hidden; position: relative; margin-left: 70px; margin-right: 30px; }
+    .color-bar-container { height: 15px; margin-bottom: 5px; border: 1px solid #ccc; overflow: hidden; position: relative; margin-left: 70px; margin-right: 20px; }
     .color-bar-canvas { width: 100%; height: 100%; }
     .color-bar-label { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-weight: bold; pointer-events: none; color: #333; font-size: 10px; }
     .step-content { padding: 20px; }
@@ -104,7 +104,9 @@
               <canvas id="fullMainCanvas" class="upload-preview-canvas"></canvas>
             </div>
           </div>
-          <button class="btn btn-info btn-xs" id="flip-step2"><i class="fa fa-refresh"></i> Flip Endpoints</button>
+          <div class="color-bar-container" style="margin-left:0; margin-right:0; width:100%; max-width:800px; display:inline-block;">
+            <canvas id="full-preview-bar" class="color-bar-canvas"></canvas>
+          </div>
           <div id="endpoints-display"></div>
           <div class="nav-buttons">
             <button class="btn btn-default prev-step">Return to previous step</button>
@@ -159,7 +161,6 @@
             <div class="error-msg" id="sample-error">all endpoints must be within the image</div>
             <br>
             <button class="btn btn-info btn-xs" id="reset-sample-ref">Reset Reference Point</button>
-            <button class="btn btn-info btn-xs" id="flip-step4"><i class="fa fa-refresh"></i> Flip Endpoints</button>
           </div>
 
           <div class="nav-buttons">
@@ -193,8 +194,8 @@
     $(document).ready(function() {
       var stepper = new Stepper($('.bs-stepper')[0], { linear: false });
       var images = { sample: null, calib: null, full: null };
-      var endpoints = { a: null, b: null, ref: null };
-      var originalEndpoints = { a: null, b: null, ref: null };
+      var endpoints = { a: null, b: null, ref: null, angle: 0 };
+      var originalEndpoints = { a: null, b: null, ref: null, angle: 0 };
       var calibPixels = null;
       var calibVars = { p1: { x: null, nm: null }, p2: { x: null, nm: null } };
       var calibGraph = null;
@@ -238,8 +239,9 @@
         c.width = 800; c.height = (800/images.full.width)*images.full.height;
         c.getContext('2d').drawImage(images.full, 0, 0, c.width, c.height);
 
-        setupDraggableLine3Point(c, images.full, endpoints, (pts) => {
+        setupDraggableLine3Point(c, images.full, endpoints, (pts, outOfBounds, pixels) => {
           endpoints = pts;
+          if (pixels.length > 0) updateColorBar('full-preview-bar', pixels);
           if (pts.a && pts.b && pts.ref) {
             $('#to-step-3').prop('disabled', false);
             $('#endpoints-display').text(`Endpoints: (${Math.round(pts.a.x)}, ${Math.round(pts.a.y)}) to (${Math.round(pts.b.x)}, ${Math.round(pts.b.y)}), Ref: (${Math.round(pts.ref.x)}, ${Math.round(pts.ref.y)})`);
@@ -250,7 +252,7 @@
         }, false);
       }
       $('#to-step-2').click(() => {
-        endpoints = { a: null, b: null, ref: null };
+        endpoints = { a: null, b: null, ref: null, angle: 0 };
         goToStep2();
       });
 
@@ -267,18 +269,7 @@
         });
       }
 
-      function extractPixels(img, pts, canvasWidth, canvasHeight) {
-        let off = document.createElement('canvas'); off.width = img.width; off.height = img.height;
-        let ctx = off.getContext('2d'); ctx.drawImage(img, 0, 0);
-        let swbImg = new SpectralWorkbench.Image(null, { url: img.src }); swbImg.obj = img; swbImg.width = img.width; swbImg.height = img.height; swbImg.ctx = ctx;
-        let scaleX = img.width / canvasWidth, scaleY = img.height / canvasHeight;
-        let raw = swbImg.getLine(pts.a.x * scaleX, pts.a.y * scaleY, pts.b.x * scaleX, pts.b.y * scaleY);
-        return raw.map(p => ({ r: p[0], g: p[1], b: p[2] }));
-      }
-
       function initCalibGraph() {
-        let cw = 800, ch = (800/images.calib.width)*images.calib.height;
-        calibPixels = extractPixels(images.calib, endpoints, cw, ch);
         $('#calibGraph').empty();
         calibGraph = new SpectralWorkbench.Graph({ selector: '#calibGraph' });
         calibGraph.chart.margin({ top: 30, right: 20, bottom: 50, left: 70 });
@@ -310,8 +301,8 @@
         let c = document.getElementById('calibLineCanvas');
         c.width = cw; c.height = ch;
         c.getContext('2d').drawImage(images.calib, 0, 0, cw, ch);
-        setupDraggableLine3Point(c, images.calib, endpoints, (pts, outOfBounds) => {
-          endpoints = pts; initCalibGraph(); checkReady();
+        setupDraggableLine3Point(c, images.calib, endpoints, (pts, outOfBounds, pixels) => {
+          endpoints = pts; calibPixels = pixels; initCalibGraph(); checkReady();
         }, true, 'calib-error');
         initCalibGraph();
       }
@@ -332,7 +323,7 @@
         let c = document.getElementById('sampleAdjCanvas');
         c.width = cw; c.height = ch;
         c.getContext('2d').drawImage(images.sample, 0, 0, cw, ch);
-        setupDraggableLine3Point(c, images.sample, endpoints, (pts, outOfBounds) => {
+        setupDraggableLine3Point(c, images.sample, endpoints, (pts, outOfBounds, pixels) => {
           endpoints = pts; $('#btn-apply-calibration').prop('disabled', outOfBounds);
         }, true, 'sample-error');
       }
@@ -343,12 +334,13 @@
           let tmp = endpoints.a;
           endpoints.a = endpoints.b;
           endpoints.b = tmp;
+          // After flipping, re-init the current step to update the graph/preview
           if (stepper._currentIndex === 1) goToStep2();
           else if (stepper._currentIndex === 2) goToStep3();
           else if (stepper._currentIndex === 3) goToStep4();
         }
       }
-      $('#flip-step2, #flip-step3, #flip-step4').click(flipEndpoints);
+      $('#flip-step3').click(flipEndpoints);
 
       var finalLines = null;
       function renderFinalGraph() {
@@ -376,14 +368,9 @@
         setTimeout(() => {
           g.updateSize()();
           syncColorBar(g, 'final-color-bar', null, specDataLines);
-
           g.chart.yDomain([0, 1.0]);
-
-          if (isRelative) {
-              g.chart.yAxis.axisLabel("Intensity (%)").tickFormat(d3.format('.0%'));
-          } else {
-              g.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
-          }
+          if (isRelative) g.chart.yAxis.axisLabel("Intensity (%)").tickFormat(d3.format('.0%'));
+          else g.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
           g.update();
         }, 500);
         g.datum.downloadCSV('#btn-export-csv');
@@ -395,8 +382,16 @@
         let w = calibPixels.length;
         let n1 = calibVars.p1.x / (w - 1), n2 = calibVars.p2.x / (w - 1);
         let m = (calibVars.p2.nm - calibVars.p1.nm) / (n2 - n1), c = calibVars.p1.nm - m * n1;
+
+        // Re-extract pixels from sample image using final endpoints
         let cw = 800, ch = (800/images.sample.width)*images.sample.height;
-        let finalSamplePixels = extractPixels(images.sample, endpoints, cw, ch);
+        let off = document.createElement('canvas'); off.width = images.sample.width; off.height = images.sample.height;
+        let ctx = off.getContext('2d'); ctx.drawImage(images.sample, 0, 0);
+        let swbImg = new SpectralWorkbench.Image(null, { url: images.sample.src }); swbImg.obj = images.sample; swbImg.width = images.sample.width; swbImg.height = images.sample.height; swbImg.ctx = ctx;
+        let scaleX = images.sample.width / cw, scaleY = images.sample.height / ch;
+        let raw = swbImg.getLine(endpoints.a.x * scaleX, endpoints.a.y * scaleY, endpoints.b.x * scaleX, endpoints.b.y * scaleY);
+        let finalSamplePixels = raw.map(p => ({ r: p[0], g: p[1], b: p[2] }));
+
         let sw = finalSamplePixels.length;
         finalLines = finalSamplePixels.map((p, i) => ({
           wavelength: +(m * (i / (sw - 1)) + c).toFixed(2),
