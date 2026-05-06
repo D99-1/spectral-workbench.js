@@ -468,19 +468,23 @@
         }
         $('#graph-final').empty();
         calibratedGraph = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
-        calibratedGraph.chart.xAxis.axisLabel("Wavelength (nm)");
-        calibratedGraph.load(new SpectralWorkbench.Spectrum({ data: { lines: linesToUse } }));
+        let formattedLines = linesToUse.map(l => ({
+          average: l.average * 2.55,
+          r: l.r * 2.55,
+          g: l.g * 2.55,
+          b: l.b * 2.55,
+          wavelength: l.wavelength
+        }));
+        let spec = new SpectralWorkbench.Spectrum({ data: { lines: formattedLines } });
+        calibratedGraph.load(spec);
         setTimeout(() => {
           calibratedGraph.updateSize()();
           syncColorBar(calibratedGraph, 'final-color-bar', null, linesToUse);
-          if (isRelative) {
-              calibratedGraph.chart.yAxis.axisLabel("Intensity (%)");
-              calibratedGraph.chart.yDomain([0, 100]);
-          } else {
-              calibratedGraph.chart.yAxis.axisLabel("Intensity (Raw)");
-              calibratedGraph.chart.yDomain([0, 255]);
-          }
-          calibratedGraph.refresh();
+          calibratedGraph.chart.forceY([0, isRelative ? 100 : 255]);
+          calibratedGraph.chart.yAxis.tickFormat(d3.format('.0f'));
+          if (isRelative) calibratedGraph.chart.yAxis.axisLabel("Intensity (%)");
+          else calibratedGraph.chart.yAxis.axisLabel("Intensity (Raw)");
+          calibratedGraph.update();
         }, 500);
         calibratedGraph.datum.downloadCSV('#btn-export-final-csv');
       }
