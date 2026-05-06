@@ -296,10 +296,12 @@
       let swbImg = new SpectralWorkbench.Image(null, { url: img.src }); swbImg.obj = img; swbImg.width = img.width; swbImg.height = img.height; swbImg.ctx = offCtx;
 
       function updateUI() {
-        if (points.a) handleA.attr('cx', points.a.x).attr('cy', points.a.y).style('display', 'block');
+        let rect = canvas.getBoundingClientRect();
+        let scale = canvas.width / rect.width;
+        if (points.a) handleA.attr({cx: points.a.x, cy: points.a.y, r: 6 * scale}).style({'display': 'block', 'stroke-width': 2 * scale});
         if (points.b) {
-          handleB.attr('cx', points.b.x).attr('cy', points.b.y).style('display', 'block');
-          line.attr('x1', points.a.x).attr('y1', points.a.y).attr('x2', points.b.x).attr('y2', points.b.y).style('display', 'block');
+          handleB.attr({cx: points.b.x, cy: points.b.y, r: 6 * scale}).style({'display': 'block', 'stroke-width': 2 * scale});
+          line.attr({x1: points.a.x, y1: points.a.y, x2: points.b.x, y2: points.b.y}).style({'display': 'block', 'stroke-width': 2 * scale});
           let scaleX = img.width / canvas.width, scaleY = img.height / canvas.height;
           let raw = swbImg.getLine(points.a.x * scaleX, points.a.y * scaleY, points.b.x * scaleX, points.b.y * scaleY);
           onUpdate(raw.map(p => ({ r: p[0], g: p[1], b: p[2] })));
@@ -318,6 +320,8 @@
         if (!points.a) points.a = { x: m[0], y: m[1] }; else if (!points.b) points.b = { x: m[0], y: m[1] };
         updateUI();
       });
+      updateUI();
+      $(window).on('resize', updateUI);
     }
 
     $(document).ready(function() {
