@@ -348,26 +348,27 @@
         function updateUI() {
           let rect = canvas.getBoundingClientRect();
           let scale = canvas.width / rect.width;
+          let baseSize = 8;
 
           if (endpoints.a) {
-            handleA.attr({cx: endpoints.a.x, cy: endpoints.a.y, r: 6 * scale})
-                   .style({'display': 'block', 'stroke-width': 2 * scale});
+            handleA.attr({cx: endpoints.a.x, cy: endpoints.a.y, r: baseSize * scale})
+                   .style({'display': 'block', 'stroke-width': (baseSize/4) * scale});
           }
           if (endpoints.b) {
-            handleB.attr({cx: endpoints.b.x, cy: endpoints.b.y, r: 6 * scale})
-                   .style({'display': 'block', 'stroke-width': 2 * scale});
+            handleB.attr({cx: endpoints.b.x, cy: endpoints.b.y, r: baseSize * scale})
+                   .style({'display': 'block', 'stroke-width': (baseSize/4) * scale});
             line.attr({x1: endpoints.a.x, y1: endpoints.a.y, x2: endpoints.b.x, y2: endpoints.b.y})
-                .style({'display': 'block', 'stroke-width': 2 * scale});
+                .style({'display': 'block', 'stroke-width': (baseSize/4) * scale});
           }
           if (endpoints.ref) {
-            handleRef.attr('transform', `translate(${endpoints.ref.x},${endpoints.ref.y}) scale(${scale})`).style('display', 'block');
-            handleRef.selectAll('line').style('stroke-width', 3); // scale handles it
+            handleRef.attr('transform', `translate(${endpoints.ref.x},${endpoints.ref.y}) scale(${scale * (baseSize/6)})`).style('display', 'block');
+            handleRef.selectAll('line').style('stroke-width', 3);
 
             let rotX = endpoints.ref.x;
-            let rotY = endpoints.ref.y - 30 * scale;
-            handleRot.attr('transform', `translate(${rotX},${rotY}) scale(${scale})`).style('display', 'block');
+            let rotY = endpoints.ref.y - 40 * scale;
+            handleRot.attr('transform', `translate(${rotX},${rotY}) scale(${scale * (baseSize/6)})`).style('display', 'block');
             stalk.attr({x1: endpoints.ref.x, y1: endpoints.ref.y, x2: rotX, y2: rotY})
-                 .style({'display': 'block', 'stroke-width': 1 * scale});
+                 .style({'display': 'block', 'stroke-width': (baseSize/8) * scale});
           }
 
           let outOfBounds = false;
@@ -450,7 +451,7 @@
         });
 
         updateUI();
-        $(window).on('resize', updateUI);
+        $(window).off('resize.swb').on('resize.swb', updateUI);
       }
 
       function extractPixels(img, pts, canvasWidth, canvasHeight) {
