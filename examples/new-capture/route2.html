@@ -198,6 +198,9 @@
           <h3>Final Calibrated Spectrum</h3>
           <div class="color-bar-container"><canvas id="final-color-bar" class="color-bar-canvas"></canvas></div>
           <div id="graph-final" style="height: 400px; width: 100%;"></div>
+          <div style="margin-top: 10px; text-align: center;">
+            <label><input type="checkbox" id="toggle-relative"> Show Relative Intensity (100% max)</label>
+          </div>
           <div class="nav-buttons text-center">
             <button class="btn btn-default prev-step">Return to previous step</button>
             <button class="btn btn-default" id="btn-export-csv"><i class="fa fa-download"></i> Export CSV</button>
@@ -429,24 +432,48 @@
         });
       }
 
+      var finalLines = null;
+      function renderFinalGraph() {
+        let isRelative = $('#toggle-relative').is(':checked');
+        let linesToUse = finalLines;
+        if (isRelative && finalLines) {
+          let maxAvg = Math.max(...finalLines.map(l => l.average));
+          if (maxAvg > 0) {
+            linesToUse = finalLines.map(l => ({
+              ...l,
+              average: (l.average / maxAvg) * 100,
+              r: (l.r / maxAvg) * 100,
+              g: (l.g / maxAvg) * 100,
+              b: (l.b / maxAvg) * 100
+            }));
+          }
+        }
+        $('#graph-final').empty();
+        let g = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
+        g.load(new SpectralWorkbench.Spectrum({ data: { lines: linesToUse } }));
+        setTimeout(() => {
+          g.updateSize()();
+          syncColorBar(g, 'final-color-bar', null, linesToUse);
+          if (isRelative) g.chart.yAxis.axisLabel("Intensity (%)");
+          else g.chart.yAxis.axisLabel("Intensity");
+          g.refresh();
+        }, 500);
+        g.datum.downloadCSV('#btn-export-csv');
+      }
+
+      $('#toggle-relative').change(renderFinalGraph);
+
       $('#btn-apply-calibration').click(() => {
         let width = calibPixels.length;
         let n1 = calibVars.p1.x / (width - 1), n2 = calibVars.p2.x / (width - 1);
         let m = (calibVars.p2.nm - calibVars.p1.nm) / (n2 - n1), c = calibVars.p1.nm - m * n1;
         let tWidth = samplePixels.length;
-        let lines = samplePixels.map((p, idx) => ({
+        finalLines = samplePixels.map((p, idx) => ({
           wavelength: +(m * (idx / (tWidth - 1)) + c).toFixed(2),
           r: p.r, g: p.g, b: p.b, average: (p.r + p.g + p.b) / 3
         }));
         stepper.to(6);
-        $('#graph-final').empty();
-        let g = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
-        g.load(new SpectralWorkbench.Spectrum({ data: { lines: lines } }));
-        setTimeout(() => {
-          g.updateSize()();
-          syncColorBar(g, 'final-color-bar', null, lines);
-        }, 500);
-        g.datum.downloadCSV('#btn-export-csv');
+        renderFinalGraph();
       });
     });
   </script>
