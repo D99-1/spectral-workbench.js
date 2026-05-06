@@ -542,18 +542,35 @@
 
         $('#graph-final').empty();
         let g = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
-        g.load(new SpectralWorkbench.Spectrum({ data: { lines: linesToUse } }));
+
+        // Convert normalized percentages back to 0-255 if we're in raw mode,
+        // or keep them as 0.0-1.0 if we're in relative mode?
+        // Actually, SpectralWorkbench.Spectrum.decodeJSON divides by 2.55 to get percentages.
+
+        let formattedLines = linesToUse.map(l => ({
+          average: l.average * 2.55,
+          r: l.r * 2.55,
+          g: l.g * 2.55,
+          b: l.b * 2.55,
+          wavelength: l.wavelength
+        }));
+
+        let spec = new SpectralWorkbench.Spectrum({ data: { lines: formattedLines } });
+        g.load(spec);
+
         setTimeout(() => {
           g.updateSize()();
           syncColorBar(g, 'final-color-bar', null, linesToUse);
+
+          g.chart.forceY([0, isRelative ? 100 : 255]);
+          g.chart.yAxis.tickFormat(d3.format('.0f'));
+
           if (isRelative) {
               g.chart.yAxis.axisLabel("Intensity (%)");
-              g.chart.yDomain([0, 100]);
           } else {
               g.chart.yAxis.axisLabel("Intensity (Raw)");
-              g.chart.yDomain([0, 255]);
           }
-          g.refresh();
+          g.update();
         }, 500);
         g.datum.downloadCSV('#btn-export-csv');
       }
