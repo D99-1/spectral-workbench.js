@@ -453,37 +453,27 @@
       var finalLines = null;
       function renderFinalGraph() {
         let isRelative = $('#toggle-relative').is(':checked');
-        let linesToUse = finalLines;
-        if (isRelative && finalLines) {
-          let maxAvg = Math.max(...finalLines.map(l => l.average));
-          if (maxAvg > 0) {
-            linesToUse = finalLines.map(l => ({
-              ...l,
-              average: (l.average / maxAvg) * 100,
-              r: (l.r / maxAvg) * 100,
-              g: (l.g / maxAvg) * 100,
-              b: (l.b / maxAvg) * 100
-            }));
-          }
-        }
+        let maxAvg = Math.max(...finalLines.map(l => l.average));
+        let processedLines = finalLines.map(l => {
+          let scale = isRelative ? (255 / maxAvg) : 1.0;
+          return {
+            average: l.average * scale,
+            r: l.r * scale,
+            g: l.g * scale,
+            b: l.b * scale,
+            wavelength: l.wavelength
+          };
+        });
         $('#graph-final').empty();
         calibratedGraph = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
-        let formattedLines = linesToUse.map(l => ({
-          average: l.average * 2.55,
-          r: l.r * 2.55,
-          g: l.g * 2.55,
-          b: l.b * 2.55,
-          wavelength: l.wavelength
-        }));
-        let spec = new SpectralWorkbench.Spectrum({ data: { lines: formattedLines } });
+        let spec = new SpectralWorkbench.Spectrum({ data: { lines: processedLines } });
         calibratedGraph.load(spec);
         setTimeout(() => {
           calibratedGraph.updateSize()();
-          syncColorBar(calibratedGraph, 'final-color-bar', null, linesToUse);
-          calibratedGraph.chart.forceY([0, isRelative ? 100 : 255]);
-          calibratedGraph.chart.yAxis.tickFormat(d3.format('.0f'));
-          if (isRelative) calibratedGraph.chart.yAxis.axisLabel("Intensity (%)");
-          else calibratedGraph.chart.yAxis.axisLabel("Intensity (Raw)");
+          syncColorBar(calibratedGraph, 'final-color-bar', null, spec.average);
+          calibratedGraph.chart.yDomain([0, 1.0]);
+          if (isRelative) calibratedGraph.chart.yAxis.axisLabel("Intensity (%)").tickFormat(d3.format('%'));
+          else calibratedGraph.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
           calibratedGraph.update();
         }, 500);
         calibratedGraph.datum.downloadCSV('#btn-export-final-csv');

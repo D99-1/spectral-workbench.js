@@ -526,49 +526,34 @@
       var finalLines = null;
       function renderFinalGraph() {
         let isRelative = $('#toggle-relative').is(':checked');
-        let linesToUse = finalLines;
-        if (isRelative && finalLines) {
-          let maxAvg = Math.max(...finalLines.map(l => l.average));
-          if (maxAvg > 0) {
-            linesToUse = finalLines.map(l => ({
-              ...l,
-              average: (l.average / maxAvg) * 100,
-              r: (l.r / maxAvg) * 100,
-              g: (l.g / maxAvg) * 100,
-              b: (l.b / maxAvg) * 100
-            }));
-          }
-        }
+        let maxAvg = Math.max(...finalLines.map(l => l.average));
+
+        let processedLines = finalLines.map(l => {
+          let scale = isRelative ? (255 / maxAvg) : 1.0;
+          return {
+            average: l.average * scale,
+            r: l.r * scale,
+            g: l.g * scale,
+            b: l.b * scale,
+            wavelength: l.wavelength
+          };
+        });
 
         $('#graph-final').empty();
         let g = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
-
-        // Convert normalized percentages back to 0-255 if we're in raw mode,
-        // or keep them as 0.0-1.0 if we're in relative mode?
-        // Actually, SpectralWorkbench.Spectrum.decodeJSON divides by 2.55 to get percentages.
-
-        let formattedLines = linesToUse.map(l => ({
-          average: l.average * 2.55,
-          r: l.r * 2.55,
-          g: l.g * 2.55,
-          b: l.b * 2.55,
-          wavelength: l.wavelength
-        }));
-
-        let spec = new SpectralWorkbench.Spectrum({ data: { lines: formattedLines } });
+        let spec = new SpectralWorkbench.Spectrum({ data: { lines: processedLines } });
         g.load(spec);
 
         setTimeout(() => {
           g.updateSize()();
-          syncColorBar(g, 'final-color-bar', null, linesToUse);
+          syncColorBar(g, 'final-color-bar', null, spec.average);
 
-          g.chart.forceY([0, isRelative ? 100 : 255]);
-          g.chart.yAxis.tickFormat(d3.format('.0f'));
+          g.chart.yDomain([0, 1.0]); // Fixed internal domain
 
           if (isRelative) {
-              g.chart.yAxis.axisLabel("Intensity (%)");
+              g.chart.yAxis.axisLabel("Intensity (%)").tickFormat(d3.format('%'));
           } else {
-              g.chart.yAxis.axisLabel("Intensity (Raw)");
+              g.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
           }
           g.update();
         }, 500);
