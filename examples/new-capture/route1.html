@@ -310,10 +310,11 @@
       function updateUI() {
         let rect = canvas.getBoundingClientRect();
         let scale = canvas.width / rect.width;
-        if (points.a) handleA.attr({cx: points.a.x, cy: points.a.y, r: 6 * scale}).style({'display': 'block', 'stroke-width': 2 * scale});
+        let baseSize = 8;
+        if (points.a) handleA.attr({cx: points.a.x, cy: points.a.y, r: baseSize * scale}).style({'display': 'block', 'stroke-width': (baseSize/4) * scale});
         if (points.b) {
-          handleB.attr({cx: points.b.x, cy: points.b.y, r: 6 * scale}).style({'display': 'block', 'stroke-width': 2 * scale});
-          line.attr({x1: points.a.x, y1: points.a.y, x2: points.b.x, y2: points.b.y}).style({'display': 'block', 'stroke-width': 2 * scale});
+          handleB.attr({cx: points.b.x, cy: points.b.y, r: baseSize * scale}).style({'display': 'block', 'stroke-width': (baseSize/4) * scale});
+          line.attr({x1: points.a.x, y1: points.a.y, x2: points.b.x, y2: points.b.y}).style({'display': 'block', 'stroke-width': (baseSize/4) * scale});
         }
         if (points.a && points.b) {
           let scaleX = img.width / canvas.width, scaleY = img.height / canvas.height;
@@ -326,8 +327,8 @@
         let target = isA ? points.a : points.b;
         target.x = Math.max(0, Math.min(canvas.width, d3.event.x)); target.y = Math.max(0, Math.min(canvas.height, d3.event.y));
         updateUI();
-      $(window).on('resize', updateUI);
       });
+      $(window).off('resize.swb').on('resize.swb', updateUI);
       handleA.call(drag); handleB.call(drag);
       svg.on('click', function() {
         if (points.a && points.b) return;
@@ -472,8 +473,13 @@
         setTimeout(() => {
           calibratedGraph.updateSize()();
           syncColorBar(calibratedGraph, 'final-color-bar', null, linesToUse);
-          if (isRelative) calibratedGraph.chart.yAxis.axisLabel("Intensity (%)");
-          else calibratedGraph.chart.yAxis.axisLabel("Intensity");
+          if (isRelative) {
+              calibratedGraph.chart.yAxis.axisLabel("Intensity (%)");
+              calibratedGraph.chart.yDomain([0, 100]);
+          } else {
+              calibratedGraph.chart.yAxis.axisLabel("Intensity (Raw)");
+              calibratedGraph.chart.yDomain([0, 255]);
+          }
           calibratedGraph.refresh();
         }, 500);
         calibratedGraph.datum.downloadCSV('#btn-export-final-csv');
