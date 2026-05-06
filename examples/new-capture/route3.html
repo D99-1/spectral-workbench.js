@@ -346,21 +346,28 @@
         handleRot.append('circle').attr({r: 5});
 
         function updateUI() {
-          if (endpoints.a) handleA.attr({cx: endpoints.a.x, cy: endpoints.a.y}).style('display', 'block');
+          let rect = canvas.getBoundingClientRect();
+          let scale = canvas.width / rect.width;
+
+          if (endpoints.a) {
+            handleA.attr({cx: endpoints.a.x, cy: endpoints.a.y, r: 6 * scale})
+                   .style({'display': 'block', 'stroke-width': 2 * scale});
+          }
           if (endpoints.b) {
-            handleB.attr({cx: endpoints.b.x, cy: endpoints.b.y}).style('display', 'block');
-            line.attr({x1: endpoints.a.x, y1: endpoints.a.y, x2: endpoints.b.x, y2: endpoints.b.y}).style('display', 'block');
+            handleB.attr({cx: endpoints.b.x, cy: endpoints.b.y, r: 6 * scale})
+                   .style({'display': 'block', 'stroke-width': 2 * scale});
+            line.attr({x1: endpoints.a.x, y1: endpoints.a.y, x2: endpoints.b.x, y2: endpoints.b.y})
+                .style({'display': 'block', 'stroke-width': 2 * scale});
           }
           if (endpoints.ref) {
-            handleRef.attr('transform', `translate(${endpoints.ref.x},${endpoints.ref.y})`).style('display', 'block');
+            handleRef.attr('transform', `translate(${endpoints.ref.x},${endpoints.ref.y}) scale(${scale})`).style('display', 'block');
+            handleRef.selectAll('line').style('stroke-width', 3); // scale handles it
 
-            // Position rotation handle at 0 degrees (up) relative to ref
-            // Or use an angle if we want it to follow the line's orientation.
-            // Let's just put it 30px above ref for now.
             let rotX = endpoints.ref.x;
-            let rotY = endpoints.ref.y - 30;
-            handleRot.attr('transform', `translate(${rotX},${rotY})`).style('display', 'block');
-            stalk.attr({x1: endpoints.ref.x, y1: endpoints.ref.y, x2: rotX, y2: rotY}).style('display', 'block');
+            let rotY = endpoints.ref.y - 30 * scale;
+            handleRot.attr('transform', `translate(${rotX},${rotY}) scale(${scale})`).style('display', 'block');
+            stalk.attr({x1: endpoints.ref.x, y1: endpoints.ref.y, x2: rotX, y2: rotY})
+                 .style({'display': 'block', 'stroke-width': 1 * scale});
           }
 
           let outOfBounds = false;
@@ -443,6 +450,7 @@
         });
 
         updateUI();
+        $(window).on('resize', updateUI);
       }
 
       function extractPixels(img, pts, canvasWidth, canvasHeight) {
