@@ -107,7 +107,6 @@
                   <canvas id="uploadPreviewCanvas" class="upload-preview-canvas"></canvas>
                 </div>
                 <p class="text-muted" style="margin-top:5px;">Click to set the sampling line (Point A to Point B).</p>
-                <button class="btn btn-info btn-xs" id="flip-endpoints-btn"><i class="fa fa-refresh"></i> Flip Endpoints</button>
               </div>
             </div>
             <div class="nav-buttons">
@@ -152,7 +151,7 @@
       </div>
 
 
-      <!-- Step 4: Calibration -->
+      <!-- Step 3: Calibration -->
       <div id="calibration" class="content center-content" role="tabpanel">
         <div class="step-content">
           <h3>Peak Calibration</h3>
@@ -190,7 +189,7 @@
         </div>
       </div>
 
-      <!-- Step 5: Final Results -->
+      <!-- Step 4: Final Results -->
       <div id="final-results" class="content center-content" role="tabpanel">
         <div class="step-content">
           <h3>Final Calibrated Spectrum</h3>
@@ -263,11 +262,6 @@
 
       $('#triggerUploadBtn').click(() => $('#spectrumImageUpload').click());
       $('#spectrumImageUpload').change(renderUploadInput);
-
-      $('#flip-endpoints-btn').click(() => {
-          let tmp = uploadPoints.a; uploadPoints.a = uploadPoints.b; uploadPoints.b = tmp;
-          renderUploadInput();
-      });
 
       function goToCalibration(pixels) {
         targetPixels = pixels;
