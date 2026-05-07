@@ -348,7 +348,7 @@
         let maxAvg = Math.max(...finalLines.map(l => l.average));
 
         let processedLines = finalLines.map(l => {
-          let scale = isRelative ? (1.0 / maxAvg) : (1.0 / 255);
+          let scale = isRelative ? (255 / maxAvg) : 1.0;
           return {
             average: l.average * scale,
             r: l.r * scale,
@@ -361,7 +361,7 @@
         $('#graph-final').empty();
         let g = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
         g.chart.margin({ top: 30, right: 20, bottom: 50, left: 70 });
-        let specDataLines = processedLines.map(l => ({ x: l.wavelength, y: l.average }));
+        let specDataLines = processedLines.map(l => ({ x: l.wavelength, y: l.average / 255 }));
         let spec = new SpectralWorkbench.Spectrum({ data: { lines: processedLines } });
         g.load(spec);
 
