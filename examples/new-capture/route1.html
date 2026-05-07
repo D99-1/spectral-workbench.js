@@ -15,6 +15,8 @@
   <script src="https://d3js.org/d3.v3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.6/nv.d3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+  <!-- HEIC support -->
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 
   <!-- Local scripts -->
   <script src="../capture/graph.js" type="text/javascript"></script>
@@ -99,7 +101,7 @@
           <div id="upload-ui" style="display:none;">
             <h3>Upload Spectrum Image</h3>
             <div class="upload-card">
-              <input type="file" id="spectrumImageUpload" accept="image/jpeg,image/png" style="display:none;">
+              <input type="file" id="spectrumImageUpload" accept="image/jpeg,image/png,image/heic" style="display:none;">
               <button class="btn btn-spectrum" id="triggerUploadBtn"><i class="fa fa-folder-open"></i> Choose Image</button>
               <span id="uploadFileName" style="margin-left:10px;"></span>
               <div id="uploadPreviewContainer" class="upload-preview-area" style="display:none;">
@@ -242,9 +244,10 @@
           $('#webcam-settings-area').hide(); $('#webcam-capture-area').show();
       });
 
-      function renderUploadInput() {
-          let file = $('#spectrumImageUpload')[0].files[0]; if (!file) return;
-          $('#uploadFileName').text(file.name);
+      async function renderUploadInput() {
+          let rawFile = $('#spectrumImageUpload')[0].files[0]; if (!rawFile) return;
+          $('#uploadFileName').text(rawFile.name);
+          let file = await processImageFile(rawFile);
           let reader = new FileReader();
           reader.onload = ev => {
             let img = new Image();
