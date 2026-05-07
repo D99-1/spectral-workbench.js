@@ -236,7 +236,7 @@ function setupDraggableLine3Point(canvas, img, endpoints, onUpdate, relativeMode
           endpoints.ref.x = d3.event.x; endpoints.ref.y = d3.event.y;
         } else {
           let isA = d3.select(this).node() === handleA.node();
-          let target = isA ? endpoints.a : endpoints.b;
+          let target = isA ? points.a : points.b;
           target.x = d3.event.x; target.y = d3.event.y;
         }
       }
@@ -264,4 +264,27 @@ function setupDraggableLine3Point(canvas, img, endpoints, onUpdate, relativeMode
 
   updateUI();
   $(window).off('resize.swb').on('resize.swb', updateUI);
+}
+
+/**
+ * Handles image file processing, including converting HEIC files to JPEG.
+ * @param {File} file
+ * @returns {Promise<Blob|File>}
+ */
+async function processImageFile(file) {
+  if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
+    if (typeof heic2any === 'undefined') {
+      console.warn("heic2any not loaded. HEIC conversion will fail.");
+      return file;
+    }
+    try {
+      const blob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.8 });
+      const converted = Array.isArray(blob) ? blob[0] : blob;
+      return new File([converted], file.name.replace(/\.heic$/i, ".jpg"), { type: "image/jpeg" });
+    } catch (e) {
+      console.error("HEIC conversion failed:", e);
+      return file;
+    }
+  }
+  return file;
 }
