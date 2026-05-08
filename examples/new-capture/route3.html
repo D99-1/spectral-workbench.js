@@ -15,10 +15,13 @@
   <script src="https://d3js.org/d3.v3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.6/nv.d3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+  <!-- HEIC support -->
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 
   <!-- Local scripts -->
   <script src="../capture/graph.js" type="text/javascript"></script>
   <script src="../../dist/spectral-workbench.js" type="text/javascript"></script>
+  <script src="utils.js" type="text/javascript"></script>
 
   <link href="https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.6/nv.d3.min.css" rel="stylesheet">
   <link href="../../dist/spectral-workbench.css" rel="stylesheet">
@@ -32,7 +35,7 @@
     .svg-overlay circle, .svg-overlay g.handle, .svg-overlay .rot-handle { pointer-events: all; cursor: move; }
     .rot-handle circle { fill: #00ff00; stroke: #008800; }
     .rot-stalk { stroke: #008800; stroke-width: 1; stroke-dasharray: 2,2; }
-    .color-bar-container { width: 100%; height: 15px; margin-bottom: 5px; border: 1px solid #ccc; overflow: hidden; position: relative; }
+    .color-bar-container { height: 15px; margin-bottom: 5px; border: 1px solid #ccc; overflow: hidden; position: relative; margin-left: 70px; margin-right: 20px; }
     .color-bar-canvas { width: 100%; height: 100%; }
     .color-bar-label { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-weight: bold; pointer-events: none; color: #333; font-size: 10px; }
     .step-content { padding: 20px; }
@@ -70,15 +73,15 @@
           <div class="row" style="margin-top: 30px;">
             <div class="col-md-4">
               <h4>1. Sample Image</h4>
-              <input type="file" id="sampleInput" accept="image/*" class="form-control">
+              <input type="file" id="sampleInput" accept="image/jpeg,image/png,image/heic" class="form-control">
             </div>
             <div class="col-md-4">
               <h4>2. Calibration Image</h4>
-              <input type="file" id="calibInput" accept="image/*" class="form-control">
+              <input type="file" id="calibInput" accept="image/jpeg,image/png,image/heic" class="form-control">
             </div>
             <div class="col-md-4">
               <h4>3. Full Spectrum</h4>
-              <input type="file" id="fullInput" accept="image/*" class="form-control">
+              <input type="file" id="fullInput" accept="image/jpeg,image/png,image/heic" class="form-control">
             </div>
           </div>
           <div class="image-row" id="preview-row" style="display:none;">
@@ -87,7 +90,7 @@
             <div class="image-preview-small"><h5>Full Spectrum</h5><canvas id="fullSmall"></canvas></div>
           </div>
           <div class="nav-buttons">
-            <a href="index.html" class="btn btn-default">Return to previous step</a>
+            <a href="index.html" class="btn btn-default">Return to Home</a>
             <button class="btn btn-primary" id="to-step-2" disabled>Next: Set Endpoints</button>
           </div>
         </div>
@@ -102,6 +105,9 @@
             <div style="position:relative; display:inline-block;">
               <canvas id="fullMainCanvas" class="upload-preview-canvas"></canvas>
             </div>
+          </div>
+          <div class="color-bar-container" style="margin-left:0; margin-right:0; width:100%; max-width:800px; display:inline-block;">
+            <canvas id="full-preview-bar" class="color-bar-canvas"></canvas>
           </div>
           <div id="endpoints-display"></div>
           <div class="nav-buttons">
@@ -126,6 +132,7 @@
             <div class="error-msg" id="calib-error">all endpoints must be within the image</div>
             <br>
             <button class="btn btn-info btn-xs" id="reset-calib-ref">Reset Reference Point</button>
+            <button class="btn btn-info btn-xs" id="flip-step3"><i class="fa fa-refresh"></i> Flip Endpoints</button>
           </div>
 
           <div class="color-bar-container"><canvas id="calib-color-bar" class="color-bar-canvas"></canvas></div>
@@ -186,76 +193,11 @@
   </div>
 
   <script>
-    // --- Helper functions ---
-    function wavelengthToRGB(wavelength) {
-      let r, g, b, factor;
-      if (wavelength >= 380 && wavelength < 440) { r = -(wavelength - 440) / (440 - 380); g = 0.0; b = 1.0; }
-      else if (wavelength >= 440 && wavelength < 490) { r = 0.0; g = (wavelength - 440) / (490 - 440); b = 1.0; }
-      else if (wavelength >= 490 && wavelength < 510) { r = 0.0; g = 1.0; b = -(wavelength - 510) / (510 - 490); }
-      else if (wavelength >= 510 && wavelength < 580) { r = (wavelength - 510) / (580 - 510); g = 1.0; b = 0.0; }
-      else if (wavelength >= 580 && wavelength < 645) { r = 1.0; g = -(wavelength - 645) / (645 - 580); b = 0.0; }
-      else if (wavelength >= 645 && wavelength <= 780) { r = 1.0; g = 0.0; b = 0.0; }
-      else { r = 0.0; g = 0.0; b = 0.0; }
-      if (wavelength >= 380 && wavelength < 420) factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380);
-      else if (wavelength >= 420 && wavelength <= 700) factor = 1.0;
-      else if (wavelength > 700 && wavelength <= 780) factor = 0.3 + 0.7 * (780 - wavelength) / (780 - 700);
-      else factor = 0.0;
-      const gamma = 0.8, intensityMax = 255;
-      const adjust = (c, f) => Math.round(intensityMax * Math.pow(c * f, gamma));
-      return { r: adjust(r, factor), g: adjust(g, factor), b: adjust(b, factor) };
-    }
-
-    function updateColorBar(canvasId, pixels, extent, calibratedLines) {
-      let canvas = document.getElementById(canvasId);
-      if (!canvas) return;
-      let displayWidth = canvas.clientWidth, displayHeight = canvas.clientHeight || 15;
-      if (canvas.width !== displayWidth || canvas.height !== displayHeight) { canvas.width = displayWidth; canvas.height = displayHeight; }
-      let container = canvas.parentNode;
-      let label = container.querySelector('.color-bar-label') || document.createElement('div');
-      label.className = 'color-bar-label'; label.innerText = "";
-      if (!label.parentNode) container.appendChild(label);
-      let ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-      if (calibratedLines) {
-        let visibleLines = extent ? calibratedLines.filter(l => l.wavelength >= extent[0] && l.wavelength <= extent[1]) : calibratedLines;
-        if (visibleLines.length === 0) return;
-        let step = w / visibleLines.length;
-        visibleLines.forEach((line, i) => {
-          let x = i * step;
-          if (line.wavelength < 380 || line.wavelength > 780) { ctx.fillStyle = "white"; }
-          else {
-            let baseColor = wavelengthToRGB(line.wavelength);
-            let intensity = line.average / 255;
-            ctx.fillStyle = `rgb(${Math.round(baseColor.r * intensity)},${Math.round(baseColor.g * intensity)},${Math.round(baseColor.b * intensity)})`;
-          }
-          ctx.fillRect(x, 0, step + 1, h);
-        });
-        return;
-      }
-      if (!pixels || pixels.length === 0) return;
-      let startIdx = extent ? Math.max(0, Math.floor(extent[0])) : 0;
-      let endIdx = extent ? Math.min(pixels.length - 1, Math.ceil(extent[1])) : pixels.length - 1;
-      let visibleCount = endIdx - startIdx + 1, step = w / visibleCount;
-      for (let i = 0; i < visibleCount; i++) {
-        let p = pixels[startIdx + i];
-        ctx.fillStyle = `rgb(${Math.round(p.r)},${Math.round(p.g)},${Math.round(p.b)})`;
-        ctx.fillRect(i * step, 0, step + 1, h);
-      }
-    }
-
-    function syncColorBar(graph, canvasId, pixels, calibratedLines) {
-      if (!graph || !graph.chart) return;
-      let update = () => { let extent = graph.chart.xAxis.scale().domain(); updateColorBar(canvasId, pixels, extent, calibratedLines); };
-      if (graph.chart.focus && graph.chart.focus.brush) graph.chart.focus.dispatch.on('brush', update);
-      graph.chart.dispatch.on('renderEnd', update);
-      update();
-    }
-
     $(document).ready(function() {
       var stepper = new Stepper($('.bs-stepper')[0], { linear: false });
       var images = { sample: null, calib: null, full: null };
-      var endpoints = { a: null, b: null, ref: null };
-      var originalEndpoints = { a: null, b: null, ref: null };
+      var endpoints = { a: null, b: null, ref: null, angle: 0 };
+      var originalEndpoints = { a: null, b: null, ref: null, angle: 0 };
       var calibPixels = null;
       var calibVars = { p1: { x: null, nm: null }, p2: { x: null, nm: null } };
       var calibGraph = null;
@@ -263,8 +205,9 @@
       $('.prev-step').click(() => stepper.previous());
 
       function handleFile(id, key) {
-        $(`#${id}`).change(e => {
-          let file = e.target.files[0]; if (!file) return;
+        $(`#${id}`).change(async e => {
+          let rawFile = e.target.files[0]; if (!rawFile) return;
+          let file = await processImageFile(rawFile);
           let reader = new FileReader();
           reader.onload = ev => {
             let img = new Image();
@@ -293,15 +236,15 @@
         }
       }
 
-      $('#to-step-2').click(() => {
-        endpoints = { a: null, b: null, ref: null };
+      function goToStep2() {
         stepper.to(2);
         let c = document.getElementById('fullMainCanvas');
         c.width = 800; c.height = (800/images.full.width)*images.full.height;
         c.getContext('2d').drawImage(images.full, 0, 0, c.width, c.height);
 
-        setupDraggableLine3Point(c, images.full, (pts) => {
+        setupDraggableLine3Point(c, images.full, endpoints, (pts, outOfBounds, pixels) => {
           endpoints = pts;
+          if (pixels.length > 0) updateColorBar('full-preview-bar', pixels);
           if (pts.a && pts.b && pts.ref) {
             $('#to-step-3').prop('disabled', false);
             $('#endpoints-display').text(`Endpoints: (${Math.round(pts.a.x)}, ${Math.round(pts.a.y)}) to (${Math.round(pts.b.x)}, ${Math.round(pts.b.y)}), Ref: (${Math.round(pts.ref.x)}, ${Math.round(pts.ref.y)})`);
@@ -310,6 +253,10 @@
             $('#to-step-3').prop('disabled', true);
           }
         }, false);
+      }
+      $('#to-step-2').click(() => {
+        endpoints = { a: null, b: null, ref: null, angle: 0 };
+        goToStep2();
       });
 
       function renderMarkers() {
@@ -325,149 +272,11 @@
         });
       }
 
-      function setupDraggableLine3Point(canvas, img, onUpdate, relativeMode, errorId) {
-        let container = d3.select(canvas.parentNode);
-        container.selectAll('.svg-overlay').remove();
-        let svg = container.append('svg').attr('class', 'svg-overlay')
-            .attr('viewBox', `0 0 ${canvas.width} ${canvas.height}`)
-            .attr('preserveAspectRatio', 'xMidYMid meet');
-
-        let line = svg.append('line').attr('stroke', '#ffcc00').attr('stroke-width', 2).style('display', 'none');
-        let stalk = svg.append('line').attr('class', 'rot-stalk').style('display', 'none');
-        let handleA = svg.append('circle').attr({r: 6, fill: '#ffcc00', stroke: '#ffaa33'}).style('display', 'none');
-        let handleB = svg.append('circle').attr({r: 6, fill: '#ffcc00', stroke: '#ffaa33'}).style('display', 'none');
-
-        let handleRef = svg.append('g').attr('class', 'handle').style('display', 'none');
-        handleRef.append('line').attr({x1: -8, y1: 0, x2: 8, y2: 0, stroke: 'blue', 'stroke-width': 3});
-        handleRef.append('line').attr({x1: 0, y1: -8, x2: 0, y2: 8, stroke: 'blue', 'stroke-width': 3});
-        handleRef.append('circle').attr({r: 10, fill: 'transparent'});
-
-        let handleRot = svg.append('g').attr('class', 'rot-handle').style('display', 'none');
-        handleRot.append('circle').attr({r: 5});
-
-        function updateUI() {
-          let rect = canvas.getBoundingClientRect();
-          let scale = canvas.width / rect.width;
-
-          if (endpoints.a) {
-            handleA.attr({cx: endpoints.a.x, cy: endpoints.a.y, r: 6 * scale})
-                   .style({'display': 'block', 'stroke-width': 2 * scale});
-          }
-          if (endpoints.b) {
-            handleB.attr({cx: endpoints.b.x, cy: endpoints.b.y, r: 6 * scale})
-                   .style({'display': 'block', 'stroke-width': 2 * scale});
-            line.attr({x1: endpoints.a.x, y1: endpoints.a.y, x2: endpoints.b.x, y2: endpoints.b.y})
-                .style({'display': 'block', 'stroke-width': 2 * scale});
-          }
-          if (endpoints.ref) {
-            handleRef.attr('transform', `translate(${endpoints.ref.x},${endpoints.ref.y}) scale(${scale})`).style('display', 'block');
-            handleRef.selectAll('line').style('stroke-width', 3); // scale handles it
-
-            let rotX = endpoints.ref.x;
-            let rotY = endpoints.ref.y - 30 * scale;
-            handleRot.attr('transform', `translate(${rotX},${rotY}) scale(${scale})`).style('display', 'block');
-            stalk.attr({x1: endpoints.ref.x, y1: endpoints.ref.y, x2: rotX, y2: rotY})
-                 .style({'display': 'block', 'stroke-width': 1 * scale});
-          }
-
-          let outOfBounds = false;
-          [endpoints.a, endpoints.b, endpoints.ref].forEach(p => {
-            if (p && (p.x < 0 || p.x > canvas.width || p.y < 0 || p.y > canvas.height)) outOfBounds = true;
-          });
-
-          if (errorId) $(`#${errorId}`).toggle(outOfBounds);
-          onUpdate(endpoints, outOfBounds);
-        }
-
-        let startAngles = null;
-        let drag = d3.behavior.drag()
-          .on('dragstart', function() {
-            if (relativeMode && d3.select(this).classed('rot-handle')) {
-              let mouse = d3.mouse(svg.node());
-              let startAngle = Math.atan2(mouse[1] - endpoints.ref.y, mouse[0] - endpoints.ref.x);
-              startAngles = {
-                mouse: startAngle,
-                a: endpoints.a ? Math.atan2(endpoints.a.y - endpoints.ref.y, endpoints.a.x - endpoints.ref.x) : 0,
-                b: endpoints.b ? Math.atan2(endpoints.b.y - endpoints.ref.y, endpoints.b.x - endpoints.ref.x) : 0,
-                distA: endpoints.a ? Math.sqrt(Math.pow(endpoints.a.x - endpoints.ref.x, 2) + Math.pow(endpoints.a.y - endpoints.ref.y, 2)) : 0,
-                distB: endpoints.b ? Math.sqrt(Math.pow(endpoints.b.x - endpoints.ref.x, 2) + Math.pow(endpoints.b.y - endpoints.ref.y, 2)) : 0
-              };
-            }
-          })
-          .on('drag', function() {
-            let node = d3.select(this).node();
-            if (relativeMode) {
-              if (d3.select(this).classed('rot-handle')) {
-                let mouse = d3.mouse(svg.node());
-                let currentAngle = Math.atan2(mouse[1] - endpoints.ref.y, mouse[0] - endpoints.ref.x);
-                let delta = currentAngle - startAngles.mouse;
-
-                if (endpoints.a) {
-                  endpoints.a.x = endpoints.ref.x + startAngles.distA * Math.cos(startAngles.a + delta);
-                  endpoints.a.y = endpoints.ref.y + startAngles.distA * Math.sin(startAngles.a + delta);
-                }
-                if (endpoints.b) {
-                  endpoints.b.x = endpoints.ref.x + startAngles.distB * Math.cos(startAngles.b + delta);
-                  endpoints.b.y = endpoints.ref.y + startAngles.distB * Math.sin(startAngles.b + delta);
-                }
-              } else {
-                // Relative translation
-                let dx = d3.event.dx, dy = d3.event.dy;
-                if (endpoints.a) { endpoints.a.x += dx; endpoints.a.y += dy; }
-                if (endpoints.b) { endpoints.b.x += dx; endpoints.b.y += dy; }
-                if (endpoints.ref) { endpoints.ref.x += dx; endpoints.ref.y += dy; }
-              }
-            } else {
-              // Definition phase: move points independently
-              if (node === handleRef.node()) {
-                endpoints.ref.x = d3.event.x; endpoints.ref.y = d3.event.y;
-              } else if (node === handleA.node()) {
-                endpoints.a.x = d3.event.x; endpoints.a.y = d3.event.y;
-              } else if (node === handleB.node()) {
-                endpoints.b.x = d3.event.x; endpoints.b.y = d3.event.y;
-              }
-            }
-            updateUI();
-          });
-
-        handleRef.call(drag);
-        handleA.call(drag);
-        handleB.call(drag);
-        handleRot.call(drag);
-
-        svg.on('click', function() {
-          if (relativeMode) return;
-          if (endpoints.a && endpoints.b && endpoints.ref) return;
-
-          let m = d3.mouse(this);
-          let p = { x: m[0], y: m[1] };
-
-          if (!endpoints.a) endpoints.a = p;
-          else if (!endpoints.b) endpoints.b = p;
-          else if (!endpoints.ref) endpoints.ref = p;
-
-          updateUI();
-        });
-
-        updateUI();
-        $(window).on('resize', updateUI);
-      }
-
-      function extractPixels(img, pts, canvasWidth, canvasHeight) {
-        let off = document.createElement('canvas'); off.width = img.width; off.height = img.height;
-        let ctx = off.getContext('2d'); ctx.drawImage(img, 0, 0);
-        let swbImg = new SpectralWorkbench.Image(null, { url: img.src }); swbImg.obj = img; swbImg.width = img.width; swbImg.height = img.height; swbImg.ctx = ctx;
-        let scaleX = img.width / canvasWidth, scaleY = img.height / canvasHeight;
-        let raw = swbImg.getLine(pts.a.x * scaleX, pts.a.y * scaleY, pts.b.x * scaleX, pts.b.y * scaleY);
-        return raw.map(p => ({ r: p[0], g: p[1], b: p[2] }));
-      }
-
       function initCalibGraph() {
-        let cw = 800, ch = (800/images.calib.width)*images.calib.height;
-        calibPixels = extractPixels(images.calib, endpoints, cw, ch);
         $('#calibGraph').empty();
         calibGraph = new SpectralWorkbench.Graph({ selector: '#calibGraph' });
-        calibGraph.load(new SpectralWorkbench.Spectrum({ data: { lines: calibPixels.map((p,i)=>({pixel:i, r:p.r, g:p.g, b:p.b, average:(p.r+p.g+p.b)/3})) } }));
+        calibGraph.chart.margin({ top: 30, right: 20, bottom: 50, left: 70 });
+        calibGraph.load(createRGBSpectrum(calibPixels));
         setTimeout(() => {
           calibGraph.updateSize()();
           syncColorBar(calibGraph, 'calib-color-bar', calibPixels);
@@ -489,64 +298,83 @@
       }
       $('#p1-nm, #p2-nm').on('input', checkReady);
 
-      $('#to-step-3').click(() => {
+      function goToStep3() {
         stepper.to(3);
         let cw = 800, ch = (800/images.calib.width)*images.calib.height;
         let c = document.getElementById('calibLineCanvas');
         c.width = cw; c.height = ch;
         c.getContext('2d').drawImage(images.calib, 0, 0, cw, ch);
-        setupDraggableLine3Point(c, images.calib, (pts, outOfBounds) => {
-          endpoints = pts; initCalibGraph(); checkReady();
+        setupDraggableLine3Point(c, images.calib, endpoints, (pts, outOfBounds, pixels) => {
+          endpoints = pts; calibPixels = pixels; initCalibGraph(); checkReady();
         }, true, 'calib-error');
         initCalibGraph();
-      });
+      }
+      $('#to-step-3').click(goToStep3);
 
       $('#reset-calib-ref').click(() => {
         endpoints = JSON.parse(JSON.stringify(originalEndpoints));
-        $('#to-step-3').click();
+        goToStep3();
       });
       $('#reset-sample-ref').click(() => {
         endpoints = JSON.parse(JSON.stringify(originalEndpoints));
-        $('#to-step-4').click();
+        goToStep4();
       });
 
-      $('#to-step-4').click(() => {
+      function goToStep4() {
         stepper.to(4);
         let cw = 800, ch = (800/images.sample.width)*images.sample.height;
         let c = document.getElementById('sampleAdjCanvas');
         c.width = cw; c.height = ch;
         c.getContext('2d').drawImage(images.sample, 0, 0, cw, ch);
-        setupDraggableLine3Point(c, images.sample, (pts, outOfBounds) => {
+        setupDraggableLine3Point(c, images.sample, endpoints, (pts, outOfBounds, pixels) => {
           endpoints = pts; $('#btn-apply-calibration').prop('disabled', outOfBounds);
         }, true, 'sample-error');
-      });
+      }
+      $('#to-step-4').click(goToStep4);
+
+      function flipEndpoints() {
+        if (endpoints.a && endpoints.b) {
+          let tmp = endpoints.a;
+          endpoints.a = endpoints.b;
+          endpoints.b = tmp;
+          // After flipping, re-init the current step to update the graph/preview
+          if (stepper._currentIndex === 1) goToStep2();
+          else if (stepper._currentIndex === 2) goToStep3();
+          else if (stepper._currentIndex === 3) goToStep4();
+        }
+      }
+      $('#flip-step3').click(flipEndpoints);
 
       var finalLines = null;
       function renderFinalGraph() {
         let isRelative = $('#toggle-relative').is(':checked');
-        let linesToUse = finalLines;
-        if (isRelative && finalLines) {
-          let maxAvg = Math.max(...finalLines.map(l => l.average));
-          if (maxAvg > 0) {
-            linesToUse = finalLines.map(l => ({
-              ...l,
-              average: (l.average / maxAvg) * 100,
-              r: (l.r / maxAvg) * 100,
-              g: (l.g / maxAvg) * 100,
-              b: (l.b / maxAvg) * 100
-            }));
-          }
-        }
+        let maxAvg = Math.max(...finalLines.map(l => l.average));
+
+        let processedLines = finalLines.map(l => {
+          let scale = isRelative ? (255 / maxAvg) : 1.0;
+          return {
+            average: l.average * scale,
+            r: l.r * scale,
+            g: l.g * scale,
+            b: l.b * scale,
+            wavelength: l.wavelength
+          };
+        });
 
         $('#graph-final').empty();
         let g = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
-        g.load(new SpectralWorkbench.Spectrum({ data: { lines: linesToUse } }));
+        g.chart.margin({ top: 30, right: 20, bottom: 50, left: 70 });
+        let specDataLines = processedLines.map(l => ({ x: l.wavelength, y: l.average / 255 }));
+        let spec = new SpectralWorkbench.Spectrum({ data: { lines: processedLines } });
+        g.load(spec);
+
         setTimeout(() => {
           g.updateSize()();
-          syncColorBar(g, 'final-color-bar', null, linesToUse);
-          if (isRelative) g.chart.yAxis.axisLabel("Intensity (%)");
-          else g.chart.yAxis.axisLabel("Intensity");
-          g.refresh();
+          syncColorBar(g, 'final-color-bar', null, specDataLines);
+          g.chart.yDomain([0, 1.0]);
+          if (isRelative) g.chart.yAxis.axisLabel("Intensity (%)").tickFormat(d3.format('.0%'));
+          else g.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
+          g.update();
         }, 500);
         g.datum.downloadCSV('#btn-export-csv');
       }
@@ -557,8 +385,16 @@
         let w = calibPixels.length;
         let n1 = calibVars.p1.x / (w - 1), n2 = calibVars.p2.x / (w - 1);
         let m = (calibVars.p2.nm - calibVars.p1.nm) / (n2 - n1), c = calibVars.p1.nm - m * n1;
+
+        // Re-extract pixels from sample image using final endpoints
         let cw = 800, ch = (800/images.sample.width)*images.sample.height;
-        let finalSamplePixels = extractPixels(images.sample, endpoints, cw, ch);
+        let off = document.createElement('canvas'); off.width = images.sample.width; off.height = images.sample.height;
+        let ctx = off.getContext('2d'); ctx.drawImage(images.sample, 0, 0);
+        let swbImg = new SpectralWorkbench.Image(null, { url: images.sample.src }); swbImg.obj = images.sample; swbImg.width = images.sample.width; swbImg.height = images.sample.height; swbImg.ctx = ctx;
+        let scaleX = images.sample.width / cw, scaleY = images.sample.height / ch;
+        let raw = swbImg.getLine(endpoints.a.x * scaleX, endpoints.a.y * scaleY, endpoints.b.x * scaleX, endpoints.b.y * scaleY);
+        let finalSamplePixels = raw.map(p => ({ r: p[0], g: p[1], b: p[2] }));
+
         let sw = finalSamplePixels.length;
         finalLines = finalSamplePixels.map((p, i) => ({
           wavelength: +(m * (i / (sw - 1)) + c).toFixed(2),

@@ -15,6 +15,8 @@
   <script src="https://d3js.org/d3.v3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.6/nv.d3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+  <!-- HEIC support -->
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 
   <!-- Local scripts -->
   <script src="../capture/graph.js" type="text/javascript"></script>
@@ -22,6 +24,7 @@
   <script src="../../dist/capture.dist.js" type="text/javascript"></script>
   <script src="../capture/api.js" type="text/javascript"></script>
   <script src="../../dist/spectral-workbench.js" type="text/javascript"></script>
+  <script src="utils.js" type="text/javascript"></script>
 
   <link href="https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.6/nv.d3.min.css" rel="stylesheet">
   <link href="../../dist/spectral-workbench.css" rel="stylesheet">
@@ -40,7 +43,7 @@
     .calib-marker { stroke: red; stroke-width: 2px; }
     .calib-marker-label { fill: red; font-size: 10px; font-weight: bold; }
     #calibGraph svg { cursor: crosshair !important; }
-    .color-bar-container { width: 100%; height: 15px; margin-bottom: 5px; border: 1px solid #ccc; overflow: hidden; position: relative; }
+    .color-bar-container { height: 15px; margin-bottom: 5px; border: 1px solid #ccc; overflow: hidden; position: relative; margin-left: 70px; margin-right: 20px; }
     .color-bar-canvas { width: 100%; height: 100%; }
     .color-bar-label { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-weight: bold; pointer-events: none; color: #333; font-size: 10px; }
     .step-content { padding: 20px; }
@@ -109,7 +112,7 @@
           <div id="sample-upload-ui" style="display:none;">
             <h3>Upload Sample Image</h3>
             <div class="upload-card">
-              <input type="file" id="sampleImageUpload" accept="image/jpeg,image/png" style="display:none;">
+              <input type="file" id="sampleImageUpload" accept="image/jpeg,image/png,image/heic" style="display:none;">
               <button class="btn btn-spectrum" id="triggerSampleUploadBtn"><i class="fa fa-folder-open"></i> Choose Image</button>
               <div id="samplePreviewContainer" class="upload-preview-area" style="display:none;">
                 <div style="position:relative; display:inline-block;">
@@ -149,7 +152,7 @@
           <div id="calib-upload-ui" style="display:none;">
             <h3>Upload Calibration Image</h3>
             <div class="upload-card">
-              <input type="file" id="calibImageUpload" accept="image/jpeg,image/png" style="display:none;">
+              <input type="file" id="calibImageUpload" accept="image/jpeg,image/png,image/heic" style="display:none;">
               <button class="btn btn-spectrum" id="triggerCalibUploadBtn"><i class="fa fa-folder-open"></i> Choose Image</button>
               <div id="calibPreviewContainer" class="upload-preview-area" style="display:none;">
                 <div style="position:relative; display:inline-block;">
@@ -187,6 +190,7 @@
           </div>
           <div class="nav-buttons text-center">
             <button class="btn btn-default prev-step">Return to previous step</button>
+            <button class="btn btn-info" id="flip-graph-btn"><i class="fa fa-refresh"></i> Flip Spectrum</button>
             <button class="btn btn-success" id="btn-apply-calibration" disabled>Apply Calibration</button>
           </div>
         </div>
@@ -213,121 +217,11 @@
   </div>
 
   <script>
-    // --- Helper functions ---
-    function createRGBSpectrum(pixels) { return new SpectralWorkbench.Spectrum({ data: { lines: pixels.map((p, i) => ({ pixel: i, r: p.r, g: p.g, b: p.b, average: (p.r+p.g+p.b)/3 })) } }); }
-
-    function wavelengthToRGB(wavelength) {
-      let r, g, b, factor;
-      if (wavelength >= 380 && wavelength < 440) { r = -(wavelength - 440) / (440 - 380); g = 0.0; b = 1.0; }
-      else if (wavelength >= 440 && wavelength < 490) { r = 0.0; g = (wavelength - 440) / (490 - 440); b = 1.0; }
-      else if (wavelength >= 490 && wavelength < 510) { r = 0.0; g = 1.0; b = -(wavelength - 510) / (510 - 490); }
-      else if (wavelength >= 510 && wavelength < 580) { r = (wavelength - 510) / (580 - 510); g = 1.0; b = 0.0; }
-      else if (wavelength >= 580 && wavelength < 645) { r = 1.0; g = -(wavelength - 645) / (645 - 580); b = 0.0; }
-      else if (wavelength >= 645 && wavelength <= 780) { r = 1.0; g = 0.0; b = 0.0; }
-      else { r = 0.0; g = 0.0; b = 0.0; }
-      if (wavelength >= 380 && wavelength < 420) factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380);
-      else if (wavelength >= 420 && wavelength <= 700) factor = 1.0;
-      else if (wavelength > 700 && wavelength <= 780) factor = 0.3 + 0.7 * (780 - wavelength) / (780 - 700);
-      else factor = 0.0;
-      const gamma = 0.8, intensityMax = 255;
-      const adjust = (c, f) => Math.round(intensityMax * Math.pow(c * f, gamma));
-      return { r: adjust(r, factor), g: adjust(g, factor), b: adjust(b, factor) };
-    }
-
-    function updateColorBar(canvasId, pixels, extent, calibratedLines) {
-      let canvas = document.getElementById(canvasId);
-      if (!canvas) return;
-      let displayWidth = canvas.clientWidth, displayHeight = canvas.clientHeight || 15;
-      if (canvas.width !== displayWidth || canvas.height !== displayHeight) { canvas.width = displayWidth; canvas.height = displayHeight; }
-      let container = canvas.parentNode;
-      let label = container.querySelector('.color-bar-label') || document.createElement('div');
-      label.className = 'color-bar-label'; label.innerText = "";
-      if (!label.parentNode) container.appendChild(label);
-      let ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-      if (calibratedLines) {
-        let visibleLines = extent ? calibratedLines.filter(l => l.wavelength >= extent[0] && l.wavelength <= extent[1]) : calibratedLines;
-        if (visibleLines.length === 0) return;
-        let step = w / visibleLines.length;
-        visibleLines.forEach((line, i) => {
-          let x = i * step;
-          if (line.wavelength < 380 || line.wavelength > 780) { ctx.fillStyle = "white"; }
-          else {
-            let baseColor = wavelengthToRGB(line.wavelength);
-            let intensity = line.average / 255;
-            ctx.fillStyle = `rgb(${Math.round(baseColor.r * intensity)},${Math.round(baseColor.g * intensity)},${Math.round(baseColor.b * intensity)})`;
-          }
-          ctx.fillRect(x, 0, step + 1, h);
-        });
-        return;
-      }
-      if (!pixels || pixels.length === 0) return;
-      let startIdx = extent ? Math.max(0, Math.floor(extent[0])) : 0;
-      let endIdx = extent ? Math.min(pixels.length - 1, Math.ceil(extent[1])) : pixels.length - 1;
-      let visibleCount = endIdx - startIdx + 1, step = w / visibleCount;
-      for (let i = 0; i < visibleCount; i++) {
-        let p = pixels[startIdx + i];
-        ctx.fillStyle = `rgb(${Math.round(p.r)},${Math.round(p.g)},${Math.round(p.b)})`;
-        ctx.fillRect(i * step, 0, step + 1, h);
-      }
-    }
-
-    function syncColorBar(graph, canvasId, pixels, calibratedLines) {
-      if (!graph || !graph.chart) return;
-      let update = () => { let extent = graph.chart.xAxis.scale().domain(); updateColorBar(canvasId, pixels, extent, calibratedLines); };
-      if (graph.chart.focus && graph.chart.focus.brush) graph.chart.focus.dispatch.on('brush', update);
-      graph.chart.dispatch.on('renderEnd', update);
-      update();
-    }
-
-    function setupDraggableLine(canvas, img, onUpdate) {
-      let points = { a: null, b: null };
-      let container = d3.select(canvas.parentNode);
-      container.selectAll('.svg-overlay').remove();
-      let svg = container.append('svg').attr('class', 'svg-overlay')
-          .attr('viewBox', `0 0 ${canvas.width} ${canvas.height}`)
-          .attr('preserveAspectRatio', 'xMidYMid meet');
-      let line = svg.append('line').attr('stroke', '#ffcc00').attr('stroke-width', 2).style('display', 'none');
-      let handleA = svg.append('circle').attr('r', 6).attr('fill', '#ffcc00').attr('stroke', '#ffaa33').style('display', 'none');
-      let handleB = svg.append('circle').attr('r', 6).attr('fill', '#ffcc00').attr('stroke', '#ffaa33').style('display', 'none');
-
-      let offCanvas = document.createElement('canvas'); offCanvas.width = img.width; offCanvas.height = img.height;
-      let offCtx = offCanvas.getContext('2d'); offCtx.drawImage(img, 0, 0);
-      let swbImg = new SpectralWorkbench.Image(null, { url: img.src }); swbImg.obj = img; swbImg.width = img.width; swbImg.height = img.height; swbImg.ctx = offCtx;
-
-      function updateUI() {
-        let rect = canvas.getBoundingClientRect();
-        let scale = canvas.width / rect.width;
-        if (points.a) handleA.attr({cx: points.a.x, cy: points.a.y, r: 6 * scale}).style({'display': 'block', 'stroke-width': 2 * scale});
-        if (points.b) {
-          handleB.attr({cx: points.b.x, cy: points.b.y, r: 6 * scale}).style({'display': 'block', 'stroke-width': 2 * scale});
-          line.attr({x1: points.a.x, y1: points.a.y, x2: points.b.x, y2: points.b.y}).style({'display': 'block', 'stroke-width': 2 * scale});
-          let scaleX = img.width / canvas.width, scaleY = img.height / canvas.height;
-          let raw = swbImg.getLine(points.a.x * scaleX, points.a.y * scaleY, points.b.x * scaleX, points.b.y * scaleY);
-          onUpdate(raw.map(p => ({ r: p[0], g: p[1], b: p[2] })));
-        }
-      }
-      let drag = d3.behavior.drag().on('drag', function() {
-        let isA = d3.select(this).node() === handleA.node();
-        let t = isA ? points.a : points.b;
-        t.x = Math.max(0, Math.min(canvas.width, d3.event.x)); t.y = Math.max(0, Math.min(canvas.height, d3.event.y));
-        updateUI();
-      });
-      handleA.call(drag); handleB.call(drag);
-      svg.on('click', function() {
-        if (points.a && points.b) return;
-        let m = d3.mouse(this);
-        if (!points.a) points.a = { x: m[0], y: m[1] }; else if (!points.b) points.b = { x: m[0], y: m[1] };
-        updateUI();
-      });
-      updateUI();
-      $(window).on('resize', updateUI);
-    }
-
     $(document).ready(function() {
       var stepper = new Stepper($('.bs-stepper')[0], { linear: false });
       var samplePixels = null, calibPixels = null, calibVars = { p1: { x: null, nm: null }, p2: { x: null, nm: null } };
       var calibGraph = null;
+      var samplePoints = { a: null, b: null }, calibPoints = { a: null, b: null };
 
       $('.prev-step').click(() => stepper.previous());
 
@@ -342,23 +236,27 @@
         }
       });
 
-      $('#triggerSampleUploadBtn').click(() => $('#sampleImageUpload').click());
-      $('#sampleImageUpload').change(e => {
-        let file = e.target.files[0]; if (!file) return;
-        let reader = new FileReader();
-        reader.onload = ev => {
-          let img = new Image();
-          img.onload = () => {
-            let c = document.getElementById('samplePreviewCanvas');
-            c.width = 600; c.height = (600/img.width)*img.height;
-            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-            $('#samplePreviewContainer').show();
-            setupDraggableLine(c, img, p => { samplePixels = p; $('#processSampleBtn').prop('disabled', false); });
+      async function renderSampleInput() {
+          let rawFile = $('#sampleImageUpload')[0].files[0];
+          if (!rawFile) return;
+          let file = await processImageFile(rawFile);
+          let reader = new FileReader();
+          reader.onload = ev => {
+            let img = new Image();
+            img.onload = () => {
+              let c = document.getElementById('samplePreviewCanvas');
+              c.width = 600; c.height = (600/img.width)*img.height;
+              c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+              $('#samplePreviewContainer').show();
+              setupDraggableLine(c, img, p => { samplePixels = p; $('#processSampleBtn').prop('disabled', false); }, samplePoints);
+            };
+            img.src = ev.target.result;
           };
-          img.src = ev.target.result;
-        };
-        reader.readAsDataURL(file);
-      });
+          reader.readAsDataURL(file);
+      }
+
+      $('#triggerSampleUploadBtn').click(() => $('#sampleImageUpload').click());
+      $('#sampleImageUpload').change(renderSampleInput);
 
       $('#processSampleBtn').click(() => stepper.to(3));
       $('#captureSampleBtn').click(() => {
@@ -378,32 +276,33 @@
         }
       });
 
-      $('#triggerCalibUploadBtn').click(() => $('#calibImageUpload').click());
-      $('#calibImageUpload').change(e => {
-        let file = e.target.files[0]; if (!file) return;
-        let reader = new FileReader();
-        reader.onload = ev => {
-          let img = new Image();
-          img.onload = () => {
-            let c = document.getElementById('calibPreviewCanvas');
-            c.width = 600; c.height = (600/img.width)*img.height;
-            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-            $('#calibPreviewContainer').show();
-            setupDraggableLine(c, img, p => { calibPixels = p; $('#processCalibBtn').prop('disabled', false); });
+      async function renderCalibInput() {
+          let rawFile = $('#calibImageUpload')[0].files[0];
+          if (!rawFile) return;
+          let file = await processImageFile(rawFile);
+          let reader = new FileReader();
+          reader.onload = ev => {
+            let img = new Image();
+            img.onload = () => {
+              let c = document.getElementById('calibPreviewCanvas');
+              c.width = 600; c.height = (600/img.width)*img.height;
+              c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+              $('#calibPreviewContainer').show();
+              setupDraggableLine(c, img, p => { calibPixels = p; $('#processCalibBtn').prop('disabled', false); }, calibPoints);
+            };
+            img.src = ev.target.result;
           };
-          img.src = ev.target.result;
-        };
-        reader.readAsDataURL(file);
-      });
+          reader.readAsDataURL(file);
+      }
 
-      $('#processCalibBtn, #captureCalibBtn').click(function() {
-        if (this.id === 'captureCalibBtn') {
-            $W.saveSpectrum();
-            calibPixels = $W.full_data.map(p => ({r:p[0], g:p[1], b:p[2]}));
-        }
+      $('#triggerCalibUploadBtn').click(() => $('#calibImageUpload').click());
+      $('#calibImageUpload').change(renderCalibInput);
+
+      function initCalibStep() {
         stepper.to(5);
         $('#calibGraph').empty();
         calibGraph = new SpectralWorkbench.Graph({ selector: '#calibGraph' });
+        calibGraph.chart.margin({ top: 30, right: 20, bottom: 50, left: 70 });
         calibGraph.load(createRGBSpectrum(calibPixels));
         setTimeout(() => {
           calibGraph.updateSize()();
@@ -416,6 +315,19 @@
             checkReady(); renderMarkers();
           });
         }, 500);
+      }
+
+      $('#processCalibBtn, #captureCalibBtn').click(function() {
+        if (this.id === 'captureCalibBtn') {
+            $W.saveSpectrum();
+            calibPixels = $W.full_data.map(p => ({r:p[0], g:p[1], b:p[2]}));
+        }
+        initCalibStep();
+      });
+
+      $('#flip-graph-btn').click(() => {
+          calibPixels.reverse();
+          initCalibStep();
       });
 
       function checkReady() {
@@ -439,28 +351,30 @@
       var finalLines = null;
       function renderFinalGraph() {
         let isRelative = $('#toggle-relative').is(':checked');
-        let linesToUse = finalLines;
-        if (isRelative && finalLines) {
-          let maxAvg = Math.max(...finalLines.map(l => l.average));
-          if (maxAvg > 0) {
-            linesToUse = finalLines.map(l => ({
-              ...l,
-              average: (l.average / maxAvg) * 100,
-              r: (l.r / maxAvg) * 100,
-              g: (l.g / maxAvg) * 100,
-              b: (l.b / maxAvg) * 100
-            }));
-          }
-        }
+        let maxAvg = Math.max(...finalLines.map(l => l.average));
+        let processedLines = finalLines.map(l => {
+          let scale = isRelative ? (255 / maxAvg) : 1.0;
+          return {
+            average: l.average * scale,
+            r: l.r * scale,
+            g: l.g * scale,
+            b: l.b * scale,
+            wavelength: l.wavelength
+          };
+        });
         $('#graph-final').empty();
         let g = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
-        g.load(new SpectralWorkbench.Spectrum({ data: { lines: linesToUse } }));
+        g.chart.margin({ top: 30, right: 20, bottom: 50, left: 70 });
+        let specDataLines = processedLines.map(l => ({ x: l.wavelength, y: l.average / 255 }));
+        let spec = new SpectralWorkbench.Spectrum({ data: { lines: processedLines } });
+        g.load(spec);
         setTimeout(() => {
           g.updateSize()();
-          syncColorBar(g, 'final-color-bar', null, linesToUse);
-          if (isRelative) g.chart.yAxis.axisLabel("Intensity (%)");
-          else g.chart.yAxis.axisLabel("Intensity");
-          g.refresh();
+          syncColorBar(g, 'final-color-bar', null, specDataLines);
+          g.chart.yDomain([0, 1.0]);
+          if (isRelative) g.chart.yAxis.axisLabel("Intensity (%)").tickFormat(d3.format('.0%'));
+          else g.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
+          g.update();
         }, 500);
         g.datum.downloadCSV('#btn-export-csv');
       }
