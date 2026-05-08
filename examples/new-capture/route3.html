@@ -68,24 +68,30 @@
       <!-- Step 1: Upload All -->
       <div id="upload-step" class="content" role="tabpanel">
         <div class="step-content text-center">
-          <h2>Upload Three Images</h2>
+          <h2>Upload Images</h2>
           <p>Please upload the sample, calibration, and full spectrum images. They must all have the same pixel dimensions.</p>
           <div class="row" style="margin-top: 30px;">
             <div class="col-md-4">
-              <h4>1. Sample Image</h4>
-              <input type="file" id="sampleInput" accept="image/jpeg,image/png,image/heic" class="form-control">
+              <label for="sampleInput">1. Sample Images (Bulk allowed)</label>
+              <input type="file" id="sampleInput" accept="image/jpeg,image/png,image/heic" class="form-control" multiple>
             </div>
             <div class="col-md-4">
-              <h4>2. Calibration Image</h4>
+              <label for="calibInput">2. Calibration Image</label>
               <input type="file" id="calibInput" accept="image/jpeg,image/png,image/heic" class="form-control">
             </div>
             <div class="col-md-4">
-              <h4>3. Full Spectrum</h4>
+              <label for="fullInput">3. Full Spectrum</label>
               <input type="file" id="fullInput" accept="image/jpeg,image/png,image/heic" class="form-control">
             </div>
           </div>
-          <div class="image-row" id="preview-row" style="display:none;">
-            <div class="image-preview-small"><h5>Sample</h5><canvas id="sampleSmall"></canvas></div>
+          <div id="sample-bulk-list" style="display:none; margin-top: 20px;">
+            <h4>Uploaded Samples</h4>
+            <table class="table table-bordered" style="background: white;">
+              <thead><tr><th style="width:100px;">Thumbnail</th><th>Name</th><th style="width:100px;">Action</th></tr></thead>
+              <tbody id="sample-table-body"></tbody>
+            </table>
+          </div>
+          <div class="image-row" id="preview-row" style="display:none; margin-top: 20px;">
             <div class="image-preview-small"><h5>Calibration</h5><canvas id="calibSmall"></canvas></div>
             <div class="image-preview-small"><h5>Full Spectrum</h5><canvas id="fullSmall"></canvas></div>
           </div>
@@ -195,12 +201,14 @@
   <script>
     $(document).ready(function() {
       var stepper = new Stepper($('.bs-stepper')[0], { linear: false });
-      var images = { sample: null, calib: null, full: null };
+      var images = { calib: null, full: null };
+      var samples = []; // [{ img, name }]
       var endpoints = { a: null, b: null, ref: null, angle: 0 };
       var originalEndpoints = { a: null, b: null, ref: null, angle: 0 };
       var calibPixels = null;
       var calibVars = { p1: { x: null, nm: null }, p2: { x: null, nm: null } };
       var calibGraph = null;
+      var bulkResults = [];
 
       $('.prev-step').click(() => stepper.previous());
 
@@ -214,8 +222,10 @@
             img.onload = () => {
               images[key] = img;
               let c = document.getElementById(`${key}Small`);
-              c.width = 200; c.height = (200/img.width)*img.height;
-              c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+              if (c) {
+                c.width = 200; c.height = (200/img.width)*img.height;
+                c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+              }
               checkAllUploaded();
             };
             img.src = ev.target.result;
@@ -223,16 +233,59 @@
           reader.readAsDataURL(file);
         });
       }
-      handleFile('sampleInput', 'sample'); handleFile('calibInput', 'calib'); handleFile('fullInput', 'full');
+      handleFile('calibInput', 'calib'); handleFile('fullInput', 'full');
+
+      $('#sampleInput').change(async e => {
+        let files = e.target.files;
+        for (let i = 0; i < files.length; i++) {
+          let rawFile = files[i];
+          let file = await processImageFile(rawFile);
+          let reader = new FileReader();
+          reader.onload = ev => {
+            let img = new Image();
+            img.onload = () => {
+              samples.push({ img: img, name: rawFile.name });
+              renderSampleTable();
+              checkAllUploaded();
+            };
+            img.src = ev.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+
+      function renderSampleTable() {
+        let tbody = $('#sample-table-body');
+        tbody.empty();
+        samples.forEach((s, idx) => {
+          let tr = $('<tr>');
+          let canvas = $('<canvas>').attr({ width: 50, height: 50 * (s.img.height / s.img.width) });
+          canvas[0].getContext('2d').drawImage(s.img, 0, 0, canvas[0].width, canvas[0].height);
+          tr.append($('<td>').append(canvas));
+          tr.append($('<td>').append($('<input>').addClass('form-control').val(s.name).on('input', function() { s.name = $(this).val(); })));
+          tr.append($('<td>').append($('<button>').addClass('btn btn-danger btn-xs').text('Remove').click(() => {
+            samples.splice(idx, 1);
+            renderSampleTable();
+            checkAllUploaded();
+          })));
+          tbody.append(tr);
+        });
+        $('#sample-bulk-list').toggle(samples.length > 0);
+      }
 
       function checkAllUploaded() {
-        if (images.sample && images.calib && images.full) {
-          if (images.sample.width !== images.calib.width || images.sample.width !== images.full.width ||
-              images.sample.height !== images.calib.height || images.sample.height !== images.full.height) {
-            alert("All images must be in the same pixel dimensions. This can be done by using the same camera for all images (which you should be doing anyway)");
+        if (samples.length > 0 && images.calib && images.full) {
+          let baseWidth = images.full.width;
+          let baseHeight = images.full.height;
+          let mismatch = samples.some(s => s.img.width !== baseWidth || s.img.height !== baseHeight) ||
+                         images.calib.width !== baseWidth || images.calib.height !== baseHeight;
+          if (mismatch) {
+            alert("All images must be in the same pixel dimensions."); $("#to-step-2").prop("disabled", true);
             return;
           }
           $('#preview-row').show(); $('#to-step-2').prop('disabled', false);
+        } else {
+          $('#to-step-2').prop('disabled', true);
         }
       }
 
@@ -322,11 +375,11 @@
 
       function goToStep4() {
         stepper.to(4);
-        let cw = 800, ch = (800/images.sample.width)*images.sample.height;
+        let cw = 800, ch = (800/samples[0].img.width)*samples[0].img.height;
         let c = document.getElementById('sampleAdjCanvas');
         c.width = cw; c.height = ch;
-        c.getContext('2d').drawImage(images.sample, 0, 0, cw, ch);
-        setupDraggableLine3Point(c, images.sample, endpoints, (pts, outOfBounds, pixels) => {
+        c.getContext('2d').drawImage(samples[0].img, 0, 0, cw, ch);
+        setupDraggableLine3Point(c, samples[0].img, endpoints, (pts, outOfBounds, pixels) => {
           endpoints = pts; $('#btn-apply-calibration').prop('disabled', outOfBounds);
         }, true, 'sample-error');
       }
@@ -337,7 +390,6 @@
           let tmp = endpoints.a;
           endpoints.a = endpoints.b;
           endpoints.b = tmp;
-          // After flipping, re-init the current step to update the graph/preview
           if (stepper._currentIndex === 1) goToStep2();
           else if (stepper._currentIndex === 2) goToStep3();
           else if (stepper._currentIndex === 3) goToStep4();
@@ -376,7 +428,20 @@
           else g.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
           g.update();
         }, 500);
-        g.datum.downloadCSV('#btn-export-csv');
+
+        $('#btn-export-csv').off('click').on('click', function() {
+          let csv = "Sample,Wavelength,Average,R,G,B\n";
+          bulkResults.forEach(res => {
+            res.lines.forEach(l => {
+              csv += `"${res.name}",${l.wavelength},${l.average.toFixed(4)},${l.r.toFixed(4)},${l.g.toFixed(4)},${l.b.toFixed(4)}\n`;
+            });
+          });
+          let blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          let url = URL.createObjectURL(blob);
+          let link = document.body.appendChild(document.createElement('a'));
+          link.href = url; link.download = 'bulk-analysis.csv'; link.click();
+          document.body.removeChild(link); URL.revokeObjectURL(url);
+        });
       }
 
       $('#toggle-relative').change(renderFinalGraph);
@@ -386,24 +451,29 @@
         let n1 = calibVars.p1.x / (w - 1), n2 = calibVars.p2.x / (w - 1);
         let m = (calibVars.p2.nm - calibVars.p1.nm) / (n2 - n1), c = calibVars.p1.nm - m * n1;
 
-        // Re-extract pixels from sample image using final endpoints
-        let cw = 800, ch = (800/images.sample.width)*images.sample.height;
-        let off = document.createElement('canvas'); off.width = images.sample.width; off.height = images.sample.height;
-        let ctx = off.getContext('2d'); ctx.drawImage(images.sample, 0, 0);
-        let swbImg = new SpectralWorkbench.Image(null, { url: images.sample.src }); swbImg.obj = images.sample; swbImg.width = images.sample.width; swbImg.height = images.sample.height; swbImg.ctx = ctx;
-        let scaleX = images.sample.width / cw, scaleY = images.sample.height / ch;
-        let raw = swbImg.getLine(endpoints.a.x * scaleX, endpoints.a.y * scaleY, endpoints.b.x * scaleX, endpoints.b.y * scaleY);
-        let finalSamplePixels = raw.map(p => ({ r: p[0], g: p[1], b: p[2] }));
+        bulkResults = [];
+        samples.forEach(sample => {
+          let cw = 800, ch = (800/sample.img.width)*sample.img.height;
+          let off = document.createElement('canvas'); off.width = sample.img.width; off.height = sample.img.height;
+          let ctx = off.getContext('2d'); ctx.drawImage(sample.img, 0, 0);
+          let swbImg = new SpectralWorkbench.Image(null, { url: sample.img.src });
+          swbImg.obj = sample.img; swbImg.width = sample.img.width; swbImg.height = sample.img.height; swbImg.ctx = ctx;
+          let scaleX = sample.img.width / cw, scaleY = sample.img.height / ch;
+          let raw = swbImg.getLine(endpoints.a.x * scaleX, endpoints.a.y * scaleY, endpoints.b.x * scaleX, endpoints.b.y * scaleY);
+          let pixels = raw.map(p => ({ r: p[0], g: p[1], b: p[2] }));
+          let sw = pixels.length;
+          let lines = pixels.map((p, i) => ({
+            wavelength: +(m * (i / (sw - 1)) + c).toFixed(2),
+            r: p.r, g: p.g, b: p.b, average: (p.r + p.g + p.b) / 3
+          }));
+          bulkResults.push({ name: sample.name, lines: lines });
+        });
 
-        let sw = finalSamplePixels.length;
-        finalLines = finalSamplePixels.map((p, i) => ({
-          wavelength: +(m * (i / (sw - 1)) + c).toFixed(2),
-          r: p.r, g: p.g, b: p.b, average: (p.r + p.g + p.b) / 3
-        }));
+        finalLines = bulkResults[0].lines; // Display the first one in the graph
         stepper.to(5);
         renderFinalGraph();
       });
     });
-  </script>
+</script>
 </body>
 </html>
