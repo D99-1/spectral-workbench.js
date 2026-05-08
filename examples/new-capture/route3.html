@@ -398,50 +398,64 @@
       $('#flip-step3').click(flipEndpoints);
 
       var finalLines = null;
+
       function renderFinalGraph() {
         let isRelative = $('#toggle-relative').is(':checked');
-        let maxAvg = Math.max(...finalLines.map(l => l.average));
-
-        let processedLines = finalLines.map(l => {
-          let scale = isRelative ? (255 / maxAvg) : 1.0;
-          return {
-            average: l.average * scale,
-            r: l.r * scale,
-            g: l.g * scale,
-            b: l.b * scale,
-            wavelength: l.wavelength
-          };
-        });
 
         $('#graph-final').empty();
         let g = new SpectralWorkbench.Graph({ selector: '#graph-final', calibrated: true });
         g.chart.margin({ top: 30, right: 20, bottom: 50, left: 70 });
-        let specDataLines = processedLines.map(l => ({ x: l.wavelength, y: l.average / 255 }));
-        let spec = new SpectralWorkbench.Spectrum({ data: { lines: processedLines } });
-        g.load(spec);
+
+        let datum;
+        if (bulkResults.length === 1) {
+          let lines = bulkResults[0].lines;
+          let maxAvg = Math.max(...lines.map(l => l.average));
+          let processed = lines.map(l => {
+            let s = isRelative ? (1.0 / maxAvg) : (1.0 / 255.0);
+            return { average: l.average * s, r: l.r * s, g: l.g * s, b: l.b * s, wavelength: l.wavelength };
+          });
+          datum = new SpectralWorkbench.Spectrum({ title: bulkResults[0].name, data: { lines: processed } });
+        } else {
+          let colors = d3.scale.category20();
+          let spectraData = bulkResults.map((res, idx) => {
+            let maxAvg = Math.max(...res.lines.map(l => l.average));
+            let processed = res.lines.map(l => {
+              let s = isRelative ? (1.0 / maxAvg) : (1.0 / 255.0);
+              return { average: l.average * s, r: l.r * s, g: l.g * s, b: l.b * s, wavelength: l.wavelength };
+            });
+            return { title: res.name, color: colors(idx), data: { lines: processed } };
+          });
+          datum = new SpectralWorkbench.Set({ spectra: [] });
+          datum.spectra = spectraData.map(s => {
+             let spec = new SpectralWorkbench.Spectrum(s);
+             spec.color = s.color;
+             // Inject color into d3 series for SpectralWorkbench.Set
+             let oldD3 = spec.d3;
+             spec.d3 = function() {
+                let d = oldD3.call(spec);
+                d.forEach(series => { series.color = spec.color; });
+                return d;
+             };
+             return spec;
+          });
+        }
+
+        g.load(datum);
 
         setTimeout(() => {
           g.updateSize()();
+          // For multi-graph, show color bar for the first sample
+          let firstRes = bulkResults[0];
+          let maxAvg0 = Math.max(...firstRes.lines.map(l => l.average));
+          let s0 = isRelative ? (1.0 / maxAvg0) : (1.0 / 255.0);
+          let specDataLines = firstRes.lines.map(l => ({ x: l.wavelength, y: l.average * s0 }));
           syncColorBar(g, 'final-color-bar', null, specDataLines);
+
           g.chart.yDomain([0, 1.0]);
           if (isRelative) g.chart.yAxis.axisLabel("Intensity (%)").tickFormat(d3.format('.0%'));
           else g.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
-          g.update();
+          if (typeof g.update === 'function') g.update();
         }, 500);
-
-        $('#btn-export-csv').off('click').on('click', function() {
-          let csv = "Sample,Wavelength,Average,R,G,B\n";
-          bulkResults.forEach(res => {
-            res.lines.forEach(l => {
-              csv += `"${res.name}",${l.wavelength},${l.average.toFixed(4)},${l.r.toFixed(4)},${l.g.toFixed(4)},${l.b.toFixed(4)}\n`;
-            });
-          });
-          let blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-          let url = URL.createObjectURL(blob);
-          let link = document.body.appendChild(document.createElement('a'));
-          link.href = url; link.download = 'bulk-analysis.csv'; link.click();
-          document.body.removeChild(link); URL.revokeObjectURL(url);
-        });
       }
 
       $('#toggle-relative').change(renderFinalGraph);
