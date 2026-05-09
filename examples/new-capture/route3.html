@@ -482,9 +482,11 @@
           g.updateSize()();
           syncColorBar(g, 'final-color-bar', null, specDataLines);
           g.chart.yDomain([0, 1.0]);
+          g.setUnits();
           if (isRelative) g.chart.yAxis.axisLabel("Intensity (%)").tickFormat(d3.format('.0%'));
           else g.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
-          g.refresh();
+          g.data.call(g.chart);
+          g.updateSize()();
         }, 500);
 
         $('#btn-export-csv').off('click').on('click', function() {
