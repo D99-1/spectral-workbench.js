@@ -374,7 +374,7 @@
           g.chart.yDomain([0, 1.0]);
           if (isRelative) g.chart.yAxis.axisLabel("Intensity (%)").tickFormat(d3.format('.0%'));
           else g.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
-          g.update();
+          g.refresh();
         }, 500);
         g.datum.downloadCSV('#btn-export-csv');
       }
