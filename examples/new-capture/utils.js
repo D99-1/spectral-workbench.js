@@ -291,11 +291,10 @@ async function processImageFile(file) {
 
 /**
  * Sets up a coordinate viewing tool on a SpectralWorkbench.Graph.
- * When the toggle is on and the user clicks/drags, it shows the coordinates of the closest point on the average line.
+ * When the user clicks/drags on the graph, it shows the coordinates of the closest point on the average line.
  * @param {SpectralWorkbench.Graph} graph
- * @param {string} toggleSelector
  */
-function setupCoordinateView(graph, toggleSelector) {
+function setupCoordinateView(graph) {
   if (!graph || !graph.chart) return;
   let svg = d3.select(graph.selector + ' svg');
   let focus = svg.select('.nv-focus');
@@ -320,15 +319,11 @@ function setupCoordinateView(graph, toggleSelector) {
     .attr('width', graph.width)
     .attr('height', graph.height)
     .attr('fill', 'transparent')
-    .style('pointer-events', 'none');
+    .style('pointer-events', 'all');
 
   let isDown = false;
 
   function update(mouse) {
-    if (!$(toggleSelector).is(':checked')) {
-      g.style('display', 'none');
-      return;
-    }
     if (!isDown) {
       g.style('display', 'none');
       return;
@@ -374,10 +369,6 @@ function setupCoordinateView(graph, toggleSelector) {
     label.attr({ x: labelX, y: labelY });
     labelBg.attr({ x: labelX - pad, y: labelY - (bbox.height - pad) });
   }
-
-  $(toggleSelector).on('change', function() {
-    overlay.style('pointer-events', $(this).is(':checked') ? 'all' : 'none');
-  }).trigger('change');
 
   overlay.on('mousedown.coord', function() {
     isDown = true;
