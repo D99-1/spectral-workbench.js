@@ -313,9 +313,18 @@ function setupCoordinateView(graph, toggleSelector) {
   let labelBg = g.append('rect').attr({ fill: 'rgba(255,255,255,0.8)', rx: 3, ry: 3 });
   let label = g.append('text').attr({ 'font-size': '12px', 'font-family': 'sans-serif', fill: 'black', 'font-weight': 'bold' });
 
+  // Add a transparent overlay to catch mouse events reliably
+  focus.selectAll('.coord-overlay').remove();
+  let overlay = focus.append('rect')
+    .attr('class', 'coord-overlay')
+    .attr('width', graph.width)
+    .attr('height', graph.height)
+    .attr('fill', 'transparent')
+    .style('pointer-events', 'none');
+
   let isDown = false;
 
-  function update() {
+  function update(mouse) {
     if (!$(toggleSelector).is(':checked')) {
       g.style('display', 'none');
       return;
@@ -325,7 +334,6 @@ function setupCoordinateView(graph, toggleSelector) {
       return;
     }
 
-    let mouse = d3.mouse(focus.node());
     let x = mouse[0];
     if (x < 0 || x > graph.width) return;
 
@@ -364,18 +372,21 @@ function setupCoordinateView(graph, toggleSelector) {
     if (labelY - bbox.height - pad < 0) labelY = pxY + bbox.height + pad + 10;
 
     label.attr({ x: labelX, y: labelY });
-    labelBg.attr({ x: labelX - pad, y: labelY - (bbox.height - pad) }); // approximation for vertical alignment
+    labelBg.attr({ x: labelX - pad, y: labelY - (bbox.height - pad) });
   }
 
-  svg.on('mousedown.coord', function() {
-    if (!$(toggleSelector).is(':checked')) return;
+  $(toggleSelector).on('change', function() {
+    overlay.style('pointer-events', $(this).is(':checked') ? 'all' : 'none');
+  }).trigger('change');
+
+  overlay.on('mousedown.coord', function() {
     isDown = true;
-    update();
+    update(d3.mouse(this));
     d3.event.preventDefault();
   });
 
-  svg.on('mousemove.coord', function() {
-    if (isDown) update();
+  overlay.on('mousemove.coord', function() {
+    if (isDown) update(d3.mouse(this));
   });
 
   d3.select(window).on('mouseup.coord', function() {
