@@ -32,6 +32,7 @@
     </div>
     <br><br>
     <div id="viewer-content" style="display:none;">
+      <div id="csv-sample-nav" class="text-center" style="margin-bottom: 15px;"></div>
       <div class="color-bar-container"><canvas id="viewer-color-bar" class="color-bar-canvas"></canvas></div>
       <div id="graph"></div>
     </div>
@@ -42,6 +43,9 @@
 
     <script>
       $(document).ready(function() {
+        let allSamples = {}; // { sampleName: [dataPoints] }
+        let currentSampleName = null;
+
         $('#btn-load-csv').click(function() {
           let file = $('#csvInput')[0].files[0];
           if (!file) {
@@ -62,12 +66,13 @@
           if (lines.length < 2) return;
 
           let header = lines[0].split(',');
-          let dataLines = [];
+          allSamples = {};
 
           // Format: Wavelength,Pixel,Average,Red,Green,Blue
           // or Sample,Wavelength,Average,R,G,B (as exported in bulk-analysis.csv)
 
           let isBulkExport = header[0].toLowerCase().indexOf('sample') !== -1;
+          let nameIdx = isBulkExport ? 0 : null;
           let wlIdx = isBulkExport ? 1 : 0;
           let avgIdx = isBulkExport ? 2 : 2;
           let rIdx = isBulkExport ? 3 : 3;
@@ -78,7 +83,10 @@
             let cols = lines[i].split(',');
             if (cols.length < 3) continue;
 
-            dataLines.push({
+            let sampleName = isBulkExport ? cols[nameIdx].replace(/^"|"$/g, '') : "Default Sample";
+            if (!allSamples[sampleName]) allSamples[sampleName] = [];
+
+            allSamples[sampleName].push({
               wavelength: parseFloat(cols[wlIdx]),
               average: parseFloat(cols[avgIdx]),
               r: parseFloat(cols[rIdx]),
@@ -87,19 +95,41 @@
             });
           }
 
-          renderGraph(dataLines);
+          let names = Object.keys(allSamples);
+          if (names.length > 0) {
+            currentSampleName = names[0];
+            renderSampleNav();
+            renderGraph();
+          }
         }
 
-        function renderGraph(dataLines) {
+        function renderSampleNav() {
+          let nav = $('#csv-sample-nav');
+          nav.empty();
+          let names = Object.keys(allSamples);
+          if (names.length <= 1 && names[0] === "Default Sample") return;
+
+          names.forEach(name => {
+            let btn = $('<button>').addClass('btn btn-sm').text(name)
+              .toggleClass('btn-primary', name === currentSampleName)
+              .toggleClass('btn-default', name !== currentSampleName)
+              .css('margin', '2px')
+              .click(() => {
+                currentSampleName = name;
+                renderSampleNav();
+                renderGraph();
+              });
+            nav.append(btn);
+          });
+        }
+
+        function renderGraph() {
+          let dataLines = allSamples[currentSampleName];
           $('#viewer-content').show();
           $('#graph').empty();
 
           let graph = new SpectralWorkbench.Graph({ selector: '#graph', calibrated: true });
           graph.chart.margin({ top: 30, right: 30, bottom: 50, left: 70 });
-
-          // dataLines currently have intensity in 0-255 range from CSV, SWB Spectrum expects 0-1 if loaded via lines
-          // Wait, actually SWB Spectrum.decodeJSON handles 0-255.
-          // Let's use SpectralWorkbench.Spectrum constructor with json data format
 
           let spec = new SpectralWorkbench.Spectrum({ data: { lines: dataLines } });
           graph.load(spec);
