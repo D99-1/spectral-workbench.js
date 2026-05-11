@@ -188,7 +188,8 @@
           <div class="color-bar-container"><canvas id="final-color-bar" class="color-bar-canvas"></canvas></div>
           <div id="graph-final" style="height: 400px; width: 100%;"></div>
           <div style="margin-top: 10px;">
-            <label><input type="checkbox" id="toggle-relative"> Show Relative Intensity (100% max)</label>
+            <label style="margin-right: 15px;"><input type="checkbox" id="toggle-relative"> Show Relative Intensity (100% max)</label>
+            <label><input type="checkbox" id="toggle-coordinates"> View Coordinates</label>
           </div>
           <div class="nav-buttons">
             <button class="btn btn-default prev-step">Return to previous step</button>
@@ -487,6 +488,8 @@
           else g.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
           g.data.call(g.chart);
           g.updateSize()();
+
+            setupCoordinateView(g, '#toggle-coordinates');
         }, 500);
 
         $('#btn-export-csv').off('click').on('click', function() {

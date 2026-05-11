@@ -288,3 +288,98 @@ async function processImageFile(file) {
   }
   return file;
 }
+
+/**
+ * Sets up a coordinate viewing tool on a SpectralWorkbench.Graph.
+ * When the toggle is on and the user clicks/drags, it shows the coordinates of the closest point on the average line.
+ * @param {SpectralWorkbench.Graph} graph
+ * @param {string} toggleSelector
+ */
+function setupCoordinateView(graph, toggleSelector) {
+  if (!graph || !graph.chart) return;
+  let svg = d3.select(graph.selector + ' svg');
+  let focus = svg.select('.nv-focus');
+  if (focus.empty()) return;
+
+  // Clear previous listeners and elements
+  svg.on('mousedown.coord', null).on('mousemove.coord', null);
+  d3.select(window).on('mouseup.coord', null);
+  focus.selectAll('.coord-view-group').remove();
+
+  let g = focus.append('g').attr('class', 'coord-view-group').style('display', 'none');
+  let lineX = g.append('line').attr({ stroke: '#888', 'stroke-width': 1, 'stroke-dasharray': '3,3' });
+  let lineY = g.append('line').attr({ stroke: '#888', 'stroke-width': 1, 'stroke-dasharray': '3,3' });
+  let circle = g.append('circle').attr({ r: 4, fill: 'black', stroke: 'white', 'stroke-width': 2 });
+  let labelBg = g.append('rect').attr({ fill: 'rgba(255,255,255,0.8)', rx: 3, ry: 3 });
+  let label = g.append('text').attr({ 'font-size': '12px', 'font-family': 'sans-serif', fill: 'black', 'font-weight': 'bold' });
+
+  let isDown = false;
+
+  function update() {
+    if (!$(toggleSelector).is(':checked')) {
+      g.style('display', 'none');
+      return;
+    }
+    if (!isDown) {
+      g.style('display', 'none');
+      return;
+    }
+
+    let mouse = d3.mouse(focus.node());
+    let x = mouse[0];
+    if (x < 0 || x > graph.width) return;
+
+    let dataX = graph.chart.xAxis.scale().invert(x);
+    let point = graph.datum.getNearestPoint(dataX, 'average');
+    if (!point) return;
+
+    let pxX = graph.chart.xAxis.scale()(point.x);
+    let pxY = graph.chart.yAxis.scale()(point.y);
+
+    g.style('display', 'block');
+    circle.attr({ cx: pxX, cy: pxY });
+    lineX.attr({ x1: pxX, x2: pxX, y1: 0, y2: graph.height });
+    lineY.attr({ x1: 0, x2: graph.width, y1: pxY, y2: pxY });
+
+    let xLabel = graph.chart.xAxis.axisLabel();
+    let yLabel = graph.chart.yAxis.axisLabel();
+    let xVal = point.x.toFixed(2);
+    let yVal = point.y;
+
+    // Format Y based on label
+    if (yLabel.indexOf('%') !== -1) yVal = (yVal * 100).toFixed(1) + '%';
+    else yVal = Math.round(yVal * 255);
+
+    let text = `${xVal} nm, ${yVal}`;
+    if (xLabel.indexOf('pixels') !== -1) text = `${Math.round(point.x)} px, ${yVal}`;
+
+    label.text(text);
+    let bbox = label.node().getBBox();
+    let pad = 4;
+    labelBg.attr({ x: bbox.x - pad, y: bbox.y - pad, width: bbox.width + pad * 2, height: bbox.height + pad * 2 });
+
+    let labelX = pxX + 10;
+    let labelY = pxY - 10;
+    if (labelX + bbox.width + pad > graph.width) labelX = pxX - bbox.width - pad - 10;
+    if (labelY - bbox.height - pad < 0) labelY = pxY + bbox.height + pad + 10;
+
+    label.attr({ x: labelX, y: labelY });
+    labelBg.attr({ x: labelX - pad, y: labelY - (bbox.height - pad) }); // approximation for vertical alignment
+  }
+
+  svg.on('mousedown.coord', function() {
+    if (!$(toggleSelector).is(':checked')) return;
+    isDown = true;
+    update();
+    d3.event.preventDefault();
+  });
+
+  svg.on('mousemove.coord', function() {
+    if (isDown) update();
+  });
+
+  d3.select(window).on('mouseup.coord', function() {
+    isDown = false;
+    g.style('display', 'none');
+  });
+}
