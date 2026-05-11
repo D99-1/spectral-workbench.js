@@ -158,7 +158,9 @@
       <div id="sample-adj-step" class="content" role="tabpanel">
         <div class="step-content text-center">
           <h3>Adjust Sampling on Sample Image</h3>
-          <p>Move the blue reference point if needed to align the sampling row with your sample.</p>
+          <p>Move the blue reference point if needed to align the sampling row with your sample. Adjusting sampling only applies to each individual image.</p>
+
+          <div id="sample-stepper" style="margin-bottom: 15px;"></div>
 
           <div style="margin-bottom: 20px;">
             <div class="upload-preview-area">
@@ -182,6 +184,7 @@
       <div id="final-results" class="content" role="tabpanel">
         <div class="step-content text-center">
           <h3>Final Calibrated Spectrum (Sample Image)</h3>
+          <div id="results-sample-stepper" style="margin-bottom: 15px;"></div>
           <div class="color-bar-container"><canvas id="final-color-bar" class="color-bar-canvas"></canvas></div>
           <div id="graph-final" style="height: 400px; width: 100%;"></div>
           <div style="margin-top: 10px;">
@@ -202,7 +205,8 @@
     $(document).ready(function() {
       var stepper = new Stepper($('.bs-stepper')[0], { linear: false });
       var images = { calib: null, full: null };
-      var samples = []; // [{ img, name }]
+      var samples = []; // [{ img, name, endpoints }]
+      var currentSampleIdx = 0;
       var endpoints = { a: null, b: null, ref: null, angle: 0 };
       var originalEndpoints = { a: null, b: null, ref: null, angle: 0 };
       var calibPixels = null;
@@ -244,7 +248,7 @@
           reader.onload = ev => {
             let img = new Image();
             img.onload = () => {
-              samples.push({ img: img, name: rawFile.name });
+              samples.push({ img: img, name: rawFile.name, endpoints: null });
               renderSampleTable();
               checkAllUploaded();
             };
@@ -369,21 +373,72 @@
         goToStep3();
       });
       $('#reset-sample-ref').click(() => {
-        endpoints = JSON.parse(JSON.stringify(originalEndpoints));
+        samples[currentSampleIdx].endpoints = JSON.parse(JSON.stringify(originalEndpoints));
         goToStep4();
       });
 
       function goToStep4() {
         stepper.to(4);
-        let cw = 800, ch = (800/samples[0].img.width)*samples[0].img.height;
+        renderSampleStepper();
+
+        let sample = samples[currentSampleIdx];
+        if (!sample.endpoints) sample.endpoints = JSON.parse(JSON.stringify(endpoints));
+
+        let cw = 800, ch = (800/sample.img.width)*sample.img.height;
         let c = document.getElementById('sampleAdjCanvas');
         c.width = cw; c.height = ch;
-        c.getContext('2d').drawImage(samples[0].img, 0, 0, cw, ch);
-        setupDraggableLine3Point(c, samples[0].img, endpoints, (pts, outOfBounds, pixels) => {
-          endpoints = pts; $('#btn-apply-calibration').prop('disabled', outOfBounds);
+        c.getContext('2d').drawImage(sample.img, 0, 0, cw, ch);
+        setupDraggableLine3Point(c, sample.img, sample.endpoints, (pts, outOfBounds, pixels) => {
+          sample.endpoints = pts;
+          // Check if ALL samples have valid endpoints
+          let anyOutOfBounds = samples.some(s => {
+             if (!s.endpoints) return false;
+             let oob = false;
+             [s.endpoints.a, s.endpoints.b, s.endpoints.ref].forEach(p => {
+               if (p && (p.x < 0 || p.x > cw || p.y < 0 || p.y > ch)) oob = true;
+             });
+             return oob;
+          });
+          $('#btn-apply-calibration').prop('disabled', anyOutOfBounds);
         }, true, 'sample-error');
       }
-      $('#to-step-4').click(goToStep4);
+
+      function renderSampleStepper() {
+        let container = $('#sample-stepper');
+        container.empty();
+        samples.forEach((s, idx) => {
+          let btn = $('<button>').addClass('btn btn-sm').text(s.name.substring(0, 15) + (s.name.length > 15 ? '...' : ''))
+            .toggleClass('btn-primary', idx === currentSampleIdx)
+            .toggleClass('btn-default', idx !== currentSampleIdx)
+            .css('margin', '2px')
+            .click(() => {
+              currentSampleIdx = idx;
+              goToStep4();
+            });
+          container.append(btn);
+        });
+      }
+
+      function renderResultsSampleStepper() {
+        let container = $('#results-sample-stepper');
+        container.empty();
+        samples.forEach((s, idx) => {
+          let btn = $('<button>').addClass('btn btn-sm').text(s.name.substring(0, 15) + (s.name.length > 15 ? '...' : ''))
+            .toggleClass('btn-primary', idx === currentSampleIdx)
+            .toggleClass('btn-default', idx !== currentSampleIdx)
+            .css('margin', '2px')
+            .click(() => {
+              currentSampleIdx = idx;
+              renderFinalGraph();
+            });
+          container.append(btn);
+        });
+      }
+
+      $('#to-step-4').click(() => {
+        currentSampleIdx = 0;
+        goToStep4();
+      });
 
       function flipEndpoints() {
         if (endpoints.a && endpoints.b) {
@@ -400,6 +455,7 @@
       var finalLines = null;
       function renderFinalGraph() {
         let isRelative = $('#toggle-relative').is(':checked');
+        finalLines = bulkResults[currentSampleIdx].lines;
         let maxAvg = Math.max(...finalLines.map(l => l.average));
 
         let processedLines = finalLines.map(l => {
@@ -420,13 +476,17 @@
         let spec = new SpectralWorkbench.Spectrum({ data: { lines: processedLines } });
         g.load(spec);
 
+        renderResultsSampleStepper();
+
         setTimeout(() => {
           g.updateSize()();
           syncColorBar(g, 'final-color-bar', null, specDataLines);
           g.chart.yDomain([0, 1.0]);
+          g.setUnits();
           if (isRelative) g.chart.yAxis.axisLabel("Intensity (%)").tickFormat(d3.format('.0%'));
           else g.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
-          g.update();
+          g.data.call(g.chart);
+          g.updateSize()();
         }, 500);
 
         $('#btn-export-csv').off('click').on('click', function() {
@@ -459,7 +519,9 @@
           let swbImg = new SpectralWorkbench.Image(null, { url: sample.img.src });
           swbImg.obj = sample.img; swbImg.width = sample.img.width; swbImg.height = sample.img.height; swbImg.ctx = ctx;
           let scaleX = sample.img.width / cw, scaleY = sample.img.height / ch;
-          let raw = swbImg.getLine(endpoints.a.x * scaleX, endpoints.a.y * scaleY, endpoints.b.x * scaleX, endpoints.b.y * scaleY);
+
+          let curEndpoints = sample.endpoints || endpoints;
+          let raw = swbImg.getLine(curEndpoints.a.x * scaleX, curEndpoints.a.y * scaleY, curEndpoints.b.x * scaleX, curEndpoints.b.y * scaleY);
           let pixels = raw.map(p => ({ r: p[0], g: p[1], b: p[2] }));
           let sw = pixels.length;
           let lines = pixels.map((p, i) => ({
@@ -469,7 +531,6 @@
           bulkResults.push({ name: sample.name, lines: lines });
         });
 
-        finalLines = bulkResults[0].lines; // Display the first one in the graph
         stepper.to(5);
         renderFinalGraph();
       });
