@@ -342,9 +342,13 @@
           calibratedGraph.updateSize()();
           syncColorBar(calibratedGraph, 'final-color-bar', null, specDataLines);
           calibratedGraph.chart.yDomain([0, 1.0]);
+          calibratedGraph.setUnits();
           if (isRelative) calibratedGraph.chart.yAxis.axisLabel("Intensity (%)").tickFormat(d3.format('.0%'));
           else calibratedGraph.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
-          calibratedGraph.update();
+          calibratedGraph.data.call(calibratedGraph.chart);
+          calibratedGraph.updateSize()();
+
+          setupCoordinateView(calibratedGraph);
         }, 500);
         calibratedGraph.datum.downloadCSV('#btn-export-final-csv');
       }

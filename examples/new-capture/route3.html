@@ -487,6 +487,8 @@
           else g.chart.yAxis.axisLabel("Intensity (Raw)").tickFormat(function(d) { return Math.round(d * 255); });
           g.data.call(g.chart);
           g.updateSize()();
+
+            setupCoordinateView(g);
         }, 500);
 
         $('#btn-export-csv').off('click').on('click', function() {

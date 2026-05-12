@@ -319,21 +319,27 @@ SpectralWorkbench.Spectrum = SpectralWorkbench.Datum.extend({
     _spectrum.getNearestPoint = function(x, channel) {
 
       channel = channel || "average";
+      var data = _spectrum[channel];
+      if (!data || data.length === 0) return null;
 
-      var closest = null;
+      // Use binary search for performance, assuming data is sorted by x
+      var low = 0, high = data.length - 1;
 
-      channel = _spectrum[channel].forEach(function(pixel) {
+      // If x is outside the range, return the boundary point
+      if (x <= data[low].x) return data[low];
+      if (x >= data[high].x) return data[high];
 
-        if (closest == null || Math.abs(pixel.x - x) < closest.dist) {
+      while (low <= high) {
+        var mid = Math.floor((low + high) / 2);
+        if (data[mid].x < x) low = mid + 1;
+        else if (data[mid].x > x) high = mid - 1;
+        else return data[mid];
+      }
 
-          closest = pixel;
-          closest.dist = Math.abs(pixel.x - x);
-
-        }
-
-      });
-
-      return closest;
+      // Check which of the two remaining points is closer
+      var d1 = Math.abs(data[low].x - x);
+      var d2 = Math.abs(data[high].x - x);
+      return d1 < d2 ? data[low] : data[high];
 
     }
 
