@@ -213,6 +213,7 @@
       var calibVars = { p1: { x: null, nm: null }, p2: { x: null, nm: null } };
       var calibGraph = null;
       var bulkResults = [];
+      const PREVIEW_CANVAS_WIDTH = 800;
 
       $('.prev-step').click(() => stepper.previous());
 
@@ -288,7 +289,7 @@
       function goToStep2() {
         stepper.to(2);
         let c = document.getElementById('fullMainCanvas');
-        c.width = 800; c.height = (800/images.full.width)*images.full.height;
+        c.width = PREVIEW_CANVAS_WIDTH; c.height = (PREVIEW_CANVAS_WIDTH / images.full.width) * images.full.height;
         c.getContext('2d').drawImage(images.full, 0, 0, c.width, c.height);
 
         setupDraggableLine3Point(c, images.full, endpoints, (pts, outOfBounds, pixels) => {
@@ -349,7 +350,7 @@
 
       function goToStep3() {
         stepper.to(3);
-        let cw = 800, ch = (800/images.calib.width)*images.calib.height;
+        let cw = PREVIEW_CANVAS_WIDTH, ch = (PREVIEW_CANVAS_WIDTH / images.calib.width) * images.calib.height;
         let c = document.getElementById('calibLineCanvas');
         c.width = cw; c.height = ch;
         c.getContext('2d').drawImage(images.calib, 0, 0, cw, ch);
@@ -376,7 +377,7 @@
         let sample = samples[currentSampleIdx];
         if (!sample.endpoints) sample.endpoints = JSON.parse(JSON.stringify(endpoints));
 
-        let cw = 800, ch = (800/sample.img.width)*sample.img.height;
+        let cw = PREVIEW_CANVAS_WIDTH, ch = (PREVIEW_CANVAS_WIDTH / sample.img.width) * sample.img.height;
         let c = document.getElementById('sampleAdjCanvas');
         c.width = cw; c.height = ch;
         c.getContext('2d').drawImage(sample.img, 0, 0, cw, ch);
@@ -385,8 +386,8 @@
           // Check if ALL samples have valid endpoints
           let anyOutOfBounds = samples.some(s => {
              if (!s.endpoints) return false;
-            let sampleCanvasWidth = 800;
-            let sampleCanvasHeight = (800 / s.img.width) * s.img.height;
+            let sampleCanvasWidth = PREVIEW_CANVAS_WIDTH;
+            let sampleCanvasHeight = (PREVIEW_CANVAS_WIDTH / s.img.width) * s.img.height;
             let oob = false;
             [s.endpoints.a, s.endpoints.b, s.endpoints.ref].forEach(p => {
               if (p && (p.x < 0 || p.x > sampleCanvasWidth || p.y < 0 || p.y > sampleCanvasHeight)) oob = true;
@@ -509,7 +510,7 @@
 
         bulkResults = [];
         samples.forEach(sample => {
-          let cw = 800, ch = (800/sample.img.width)*sample.img.height;
+          let cw = PREVIEW_CANVAS_WIDTH, ch = (PREVIEW_CANVAS_WIDTH / sample.img.width) * sample.img.height;
           let off = document.createElement('canvas'); off.width = sample.img.width; off.height = sample.img.height;
           let ctx = off.getContext('2d'); ctx.drawImage(sample.img, 0, 0);
           let swbImg = new SpectralWorkbench.Image(null, { url: sample.img.src });
