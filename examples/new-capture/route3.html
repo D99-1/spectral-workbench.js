@@ -69,7 +69,7 @@
       <div id="upload-step" class="content" role="tabpanel">
         <div class="step-content text-center">
           <h2>Upload Images</h2>
-          <p>Please upload the sample, calibration, and full spectrum images. They must all have the same pixel dimensions.</p>
+          <p>Please upload the sample, calibration, and full spectrum images.</p>
           <div class="row" style="margin-top: 30px;">
             <div class="col-md-4">
               <label for="sampleInput">1. Sample Images (Bulk allowed)</label>
@@ -279,14 +279,6 @@
 
       function checkAllUploaded() {
         if (samples.length > 0 && images.calib && images.full) {
-          let baseWidth = images.full.width;
-          let baseHeight = images.full.height;
-          let mismatch = samples.some(s => s.img.width !== baseWidth || s.img.height !== baseHeight) ||
-                         images.calib.width !== baseWidth || images.calib.height !== baseHeight;
-          if (mismatch) {
-            alert("All images must be in the same pixel dimensions."); $("#to-step-2").prop("disabled", true);
-            return;
-          }
           $('#preview-row').show(); $('#to-step-2').prop('disabled', false);
         } else {
           $('#to-step-2').prop('disabled', true);
