@@ -188,7 +188,7 @@
           <div class="color-bar-container"><canvas id="final-color-bar" class="color-bar-canvas"></canvas></div>
           <div id="graph-final" style="height: 400px; width: 100%;"></div>
           <div style="margin-top: 10px;">
-            <label><input type="checkbox" id="toggle-relative"> Show Relative Intensity (100% max)</label>
+            <label style="margin-right: 15px;"><input type="checkbox" id="toggle-relative"> Show Relative Intensity (100% max)</label><label title="Uses Intensity = 0.299*R + 0.587*G + 0.114*B (Tracker Line Profile mode)"><input type="checkbox" id="toggle-tracker-bw"> Use Tracker B&W Algorithm</label>
           </div>
           <div class="nav-buttons">
             <button class="btn btn-default prev-step">Return to previous step</button>
@@ -448,13 +448,26 @@
       $('#flip-step3').click(flipEndpoints);
 
       var finalLines = null;
-      function renderFinalGraph() {
+                  function renderFinalGraph() {
         let isRelative = $('#toggle-relative').is(':checked');
+        let useTrackerBW = $('#toggle-tracker-bw').is(':checked');
         finalLines = bulkResults[currentSampleIdx].lines;
-        let maxAvg = Math.max(...finalLines.map(l => l.average));
 
         let processedLines = finalLines.map(l => {
-          let scale = isRelative ? (255 / maxAvg) : 1.0;
+          let intensity = useTrackerBW ? (0.299 * l.r + 0.587 * l.g + 0.114 * l.b) : l.average;
+          return {
+            average: intensity,
+            r: l.r,
+            g: l.g,
+            b: l.b,
+            wavelength: l.wavelength
+          };
+        });
+
+        let maxAvg = Math.max(...processedLines.map(l => l.average));
+
+        processedLines = processedLines.map(l => {
+          let scale = isRelative ? (255 / (maxAvg || 1)) : 1.0;
           return {
             average: l.average * scale,
             r: l.r * scale,
@@ -488,9 +501,11 @@
 
         $('#btn-export-csv').off('click').on('click', function() {
           let csv = "Sample,Wavelength,Average,R,G,B\n";
+          let useTrackerBW = $('#toggle-tracker-bw').is(':checked');
           bulkResults.forEach(res => {
             res.lines.forEach(l => {
-              csv += `"${res.name}",${l.wavelength},${l.average.toFixed(4)},${l.r.toFixed(4)},${l.g.toFixed(4)},${l.b.toFixed(4)}\n`;
+              let intensity = useTrackerBW ? (0.299 * l.r + 0.587 * l.g + 0.114 * l.b) : l.average;
+              csv += `"${res.name}",${l.wavelength},${intensity.toFixed(4)},${l.r.toFixed(4)},${l.g.toFixed(4)},${l.b.toFixed(4)}\n`;
             });
           });
           let blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -502,6 +517,7 @@
       }
 
       $('#toggle-relative').change(renderFinalGraph);
+      $('#toggle-tracker-bw').change(renderFinalGraph);
 
       $('#btn-apply-calibration').click(() => {
         let w = calibPixels.length;
